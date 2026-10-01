@@ -11,6 +11,8 @@ resolution and merge decisions.
 
 Inspired by the MAGI supercomputer system from Evangelion.
 
+[![Magi Evangelion GIF](https://media1.tenor.com/m/nzH_xPTQmhQAAAAd/magi-evangelion.gif)](https://tenor.com/view/magi-evangelion-voting-ai-gif-11471230947275348500)
+
 ## Documentation and status
 
 Start with the [documentation index](docs/README.md) for goals, architecture,
