@@ -8,7 +8,7 @@ CASPER on security and performance. The design runs reviewers sequentially
 through local Ollama models and publishes COMMENT-only feedback through
 separate GitHub Apps. Humans own resolution and merge decisions.
 
-Inspired by the MAGI three supercomputer system from Evangelion.
+Inspired by the MAGI supercomputer system from Evangelion.
 
 ## Build and run
 
