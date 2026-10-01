@@ -1,0 +1,4 @@
+[github.magi]
+app_id = 1111111
+installation_id = 111111111
+private_key = "~/.config/magi/keys/magi.pem"
