@@ -1,7 +1,6 @@
 # MAGI
 
-Local-first GitHub pull-request review in Go, following
-`MAGI_Code_Review_System_Design_and_Setup.pdf`.
+Local-first GitHub pull-request review in Go.
 
 MELCHIOR focuses on correctness, BALTHASAR on requirements and tests, and
 CASPER on security and performance. The design runs reviewers sequentially
