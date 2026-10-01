@@ -1,0 +1,9 @@
+{
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules/**", "bin/**"],
+  "config": {
+    "default": true,
+    // Let prose wrap naturally; tables and source links can be long.
+    "MD013": false
+  }
+}
