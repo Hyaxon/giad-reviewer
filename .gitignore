@@ -7,3 +7,4 @@
 *.key
 .DS_Store
 *.pdf
+identity.toml

@@ -55,6 +55,15 @@ The implementation request was interrupted before code changes. The subsequent
 instruction asks for documentation instead. This task changes prose only; roadmap
 commands and configuration proposals do not imply implemented behavior.
 
+## D10: Guided interactive setup
+
+Accepted in discussion. Add a future `magi setup` command that walks users through
+getting started, including App authentication, private-key handling, model settings,
+and branch-protection explanations. Keep it usable without a local checkout or
+fixed repository. Setup guides configuration; it does not silently change GitHub
+rules or publish reviews. The detailed [interaction flow](cli.md#planned-interactive-setup)
+is proposed, and implementation is tracked in roadmap milestone 2a.
+
 ## Open decisions
 
 | Topic | Starting point or unresolved detail |

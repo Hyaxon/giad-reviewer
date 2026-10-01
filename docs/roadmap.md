@@ -28,6 +28,20 @@ Acceptance: read a real accessible PR without posting; test expiration/errors;
 reject conflicting or ambiguous targets; do not assume a `main` base or depend on
 a personal `gh` token. Choose a test PR when ready for live verification.
 
+## 2a. Interactive onboarding
+
+Build the planned [`magi setup` flow](cli.md#planned-interactive-setup) on top of
+configuration and authentication. Walk users through App installation, private-key
+storage, read-only access checks, models, and branch-protection guidance. Share
+diagnostics with the future `magi doctor` command.
+
+Acceptance: a new user can configure MAGI without a local checkout or fixed target
+repository; terminal-only users receive usable URLs/instructions; secrets are never
+echoed; saving and overwriting are deliberate; cancellation preserves existing
+settings. Report skipped/failed checks, leave repository rules unchanged, and offer
+a noninteractive configuration/validation path for containers. Model checks can be
+extended as the provider integration lands.
+
 ## 3. Linked issues and isolated checkout
 
 Fetch formal links with provenance, pagination, and explicit access failures.

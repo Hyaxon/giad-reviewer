@@ -66,8 +66,47 @@ Flag conflicts, exit codes, machine-readable output, and noninteractive defaults
 are open interface details. Noninteractive execution must not accidentally treat
 the absence of an answer as publication approval.
 
+## Planned interactive setup
+
+`magi setup` will guide first-time users through configuration step by step.
+This command is an accepted product goal, not implemented functionality. The
+following sequence is the proposed interaction:
+
+1. Explain the local review workflow and check prerequisites such as Git and Ollama.
+2. Guide users through creating or reusing one MAGI GitHub App, choosing permissions,
+   and installing it on their account. Explain App ID versus Installation ID.
+3. Explain how to generate and store a private key outside the repository. Ask for
+   the key's file path, never its contents pasted into a prompt.
+4. Validate the key and authenticate as the installation using read-only API calls.
+   Show the App identity and accessible repository scope without displaying tokens.
+5. Configure the model endpoint and reviewer assignments; distinguish downloaded
+   models from models that have passed an optional inference smoke test.
+6. Explain COMMENT-only reviews, human approvals, and conversation-resolution rules.
+   Provide manual branch-protection guidance; do not change repository rules.
+7. Preview the configuration and destination, confirm saving, and show a first-review
+   command plus any remaining setup tasks.
+
+Setup must work without a local checkout or a permanently selected repository.
+An optional repository can be used to verify access or explain its branch rules,
+but it must not become a fixed review target. A failed check must be described as
+unverified or failed rather than silently treated as successful setup.
+
+Support terminals without browser integration by printing URLs and instructions.
+Users can complete GitHub's web steps on another device. Rerunning setup should
+offer to reuse or edit existing settings, preserve unrelated values, and confirm
+before overwriting configuration or replacing keys. Cancellation must not leave a
+partially written configuration or publish anything.
+
+For unattended/container use, retain a documented configuration-file path and a
+noninteractive validation command. Do not block on prompts when no interactive
+terminal is available. Exact setup flags and persistence behavior remain to be designed.
+
+`magi setup` guides and saves configuration; `magi doctor` diagnoses an existing
+setup. They should reuse the same configuration and authentication checks.
+
 ## Future commands
 
+- `magi setup`: interactive onboarding, App access verification, and configuration.
 - `magi doctor`: validate configuration, tools, App access, and model availability.
 - `magi benchmark`: compare model/prompt assignments on known PRs.
 - `magi worker`: execute leased reviews.
