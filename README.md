@@ -6,9 +6,21 @@ Local-first GitHub pull-request review in Go, following
 MELCHIOR focuses on correctness, BALTHASAR on requirements and tests, and
 CASPER on security and performance. The design runs reviewers sequentially
 through local Ollama models and publishes COMMENT-only feedback through
-separate GitHub Apps. Humans own resolution and merge decisions.
+one shared MAGI GitHub App. Each review names its reviewer role. Humans own
+resolution and merge decisions.
 
 Inspired by the MAGI supercomputer system from Evangelion.
+
+## Documentation and status
+
+Start with the [documentation index](docs/README.md) for goals, architecture,
+setup, security, and the implementation roadmap. The [decision log](docs/decisions.md)
+records updates to the original PDF, including one shared App and repository
+selection per command.
+
+The current implementation is a scaffold with help/version output. Configuration
+loading, GitHub authentication, and reviews are not implemented. See
+[current status](docs/status.md) and the [Go orientation guide](docs/go-development.md).
 
 ## Build and run
 
