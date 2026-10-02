@@ -64,6 +64,26 @@ fixed repository. Setup guides configuration; it does not silently change GitHub
 rules or publish reviews. The detailed [interaction flow](cli.md#planned-interactive-setup)
 is proposed, and implementation is tracked in roadmap milestone 2a.
 
+## D11: Two local authentication modes
+
+Accepted: setup offers personal-account publication through GitHub CLI authentication
+or a dedicated user-owned App. Neither requires a central MAGI backend. A provider
+interface supplies tokens to the shared GitHub client; inference, findings, and
+COMMENT-only policy remain the same. All three roles use the selected identity.
+
+This supersedes mandatory App-based publication and the proposed shared public App
+backend as the default distribution model. D02 still applies within App mode: one
+App for all three roles. Existing key/JWT code remains useful for that provider.
+See [authentication modes](authentication.md) for setup and configuration proposals.
+
+## D12: Personal mode first
+
+Implement the personal GitHub CLI provider first and defer App onboarding and
+installation-token exchange. Preserve existing App identity/key/JWT helpers. The
+CLI must not require App configuration in personal mode. `magi auth status` now
+verifies the effective user account; fetching the example PR is the next milestone.
+The two-mode setup wizard remains planned, not implemented.
+
 ## Open decisions
 
 | Topic | Starting point or unresolved detail |

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
 	"github.com/spf13/cobra"
 )
@@ -17,7 +19,8 @@ func main() {
 
 MELCHIOR reviews correctness, BALTHASAR requirements and tests, and
 CASPER security and performance. Reviews will run sequentially through
-Ollama and publish COMMENT-only feedback through separate GitHub Apps.
+Ollama and publish COMMENT-only feedback using your personal GitHub account.
+Dedicated GitHub App authentication will be available later.
 
 This is the project scaffold. The review workflow is not implemented yet.`,
 		Version:       version,
@@ -28,7 +31,11 @@ This is the project scaffold. The review workflow is not implemented yet.`,
 			return cmd.Help()
 		},
 	}
-	if err := cmd.Execute(); err != nil {
+	cmd.AddCommand(newAuthCommand())
+	cmd.AddCommand(newPRCommand())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if err := cmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "magi:", err)
 		os.Exit(1)
 	}

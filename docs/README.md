@@ -1,7 +1,7 @@
 # MAGI documentation
 
 MAGI is a general-purpose, local-first GitHub pull-request reviewer written in
-Go. Three independent review roles use local models and publish through one
+Go. Three independent review roles use local models and publish through a personal account or one user-owned
 GitHub App. Humans own review resolution and merge decisions.
 
 These documents combine the 28-page **MAGI Code Review System - Design, Setup,
@@ -20,6 +20,7 @@ They describe the intended product, not an already functioning review engine.
 | [Requirements traceability](requirements.md) | Formal issue links and requirement assessments |
 | [CLI and repository selection](cli.md) | Current commands and proposed general-purpose interface |
 | [Configuration](configuration.md) | Model settings, one App identity, and local configuration proposal |
+| [Authentication modes](authentication.md) | Personal-account and dedicated-App setup without a central backend |
 | [GitHub App setup](github-app.md) | Personal-account installation, permissions, keys, and authentication design |
 | [Local models](models.md) | Ollama, sequential execution, context limits, and benchmarking |
 | [Tools and security](security.md) | Controlled repository tools, isolation, and credential boundaries |

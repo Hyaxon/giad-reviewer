@@ -5,10 +5,27 @@
 ```sh
 go run ./cmd/magi --help
 go run ./cmd/magi --version
+go run ./cmd/magi auth status
 ```
 
-The compiled `bin/magi` supports the same flags. All commands below are planned;
+The auth status command verifies personal GitHub CLI credentials. Use
+`gh auth login --hostname github.com` first if needed; no App key is required.
+
+The compiled `bin/magi` supports the same commands. The `review` commands below are planned;
 they currently do not perform reviews.
+
+## Read PR context now
+
+```sh
+go run ./cmd/magi pr view https://github.com/OWNER/REPO/pull/42
+go run ./cmd/magi pr view 42 --repo OWNER/REPO --diff
+```
+
+This read-only command uses personal authentication and prints the title, body,
+URL, base/head branch names, commit IDs, changed files, and formal linked issues.
+It fetches the unified diff; add `--diff` to display it. Issue retrieval failures
+produce an explicit warning rather than appearing as an empty requirements list. A number requires `--repo`; local remote inference
+remains planned. Conflicting URL and `--repo` targets are rejected.
 
 ## Accepted invocation design
 
@@ -24,9 +41,8 @@ magi review https://github.com/hyaxon/some-project/pull/42
 ```
 
 Explicit input takes precedence over remote inference. No permanent target
-repository belongs in the global configuration. The App installation still needs
-access to the chosen repository; credentials do not confer access to arbitrary
-repositories outside the installation.
+repository belongs in the global configuration. The selected user or App credentials must have access to the chosen repository.
+See [authentication modes](authentication.md).
 
 ## Proposed resolution rules
 
@@ -73,12 +89,13 @@ This command is an accepted product goal, not implemented functionality. The
 following sequence is the proposed interaction:
 
 1. Explain the local review workflow and check prerequisites such as Git and Ollama.
-2. Guide users through creating or reusing one MAGI GitHub App, choosing permissions,
-   and installing it on their account. Explain App ID versus Installation ID.
-3. Explain how to generate and store a private key outside the repository. Ask for
-   the key's file path, never its contents pasted into a prompt.
-4. Validate the key and authenticate as the installation using read-only API calls.
-   Show the App identity and accessible repository scope without displaying tokens.
+2. Ask whether reviews should appear from the user's personal account or a dedicated
+   user-owned GitHub App. Explain attribution before collecting credentials.
+3. In personal mode, check GitHub CLI authentication and guide `gh auth login` if
+   needed. In App mode, guide App creation/installation and collect the App ID,
+   client ID, Installation ID, and private-key path.
+4. Verify the selected identity and access with read-only API calls, without printing
+   tokens. Do not require a PEM or App installation in personal mode.
 5. Configure the model endpoint and reviewer assignments; distinguish downloaded
    models from models that have passed an optional inference smoke test.
 6. Explain COMMENT-only reviews, human approvals, and conversation-resolution rules.

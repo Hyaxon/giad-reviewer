@@ -1,7 +1,8 @@
 # One MAGI GitHub App
 
-Status: single-App design accepted. The owner reports installation is complete;
-authentication code is not implemented.
+This guide covers the optional dedicated-App mode. See [authentication modes](authentication.md)
+for personal-account setup. Key loading and client-ID JWT signing exist; installation
+token exchange and publishing remain unimplemented.
 
 ## Identity and ownership
 
@@ -93,14 +94,23 @@ See [private key management](https://docs.github.com/en/apps/creating-github-app
 
 ## Planned authentication flow
 
+The identity file uses `[github.magi]` with `app_id`, `client_id`,
+`installation_id`, and `private_key`. JWT signing uses the **client ID** as
+`iss`, following GitHub's recommendation. The App ID is retained as metadata;
+the Installation ID selects the account installation. A client ID is not a
+client secret. Copy it from the App's General settings into local `identity.toml`.
+See the current [identity template](../identity.example.toml) and
+[JWT requirements](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app).
+
 1. Load the configured App identity and private key in trusted host code.
 2. Sign a short-lived App JWT according to GitHub's current requirements.
 3. Exchange it for an installation access token.
 4. Use the installation token for allowed repository API requests.
 5. Refresh expired tokens; keep them in memory rather than persistent logs/files.
 
-Do not use a personal `gh` login as the publisher's identity. `gh` may remain useful
-for manual developer inspection, but the product must work through its App.
+In App mode, publication must use the configured App installation; do not silently
+fall back to personal credentials. Personal `gh` authentication is supported by design
+only when the user explicitly chooses personal-account mode.
 The first live validation should be read-only. Test token acquisition and repository
 access before publishing anything. [Installation authentication](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation)
 
@@ -110,3 +120,13 @@ The owner may enable conversation resolution and maintain separate human review
 requirements. Availability depends on the repository/account plan and rule type;
 check GitHub's current UI. Test with a disposable PR. MAGI should not change rules
 or automatically resolve its own feedback.
+
+## Distribution and authentication for other users
+
+The accepted design offers personal-account authentication through `gh` and an
+optional user-owned App. Both run locally without a central MAGI backend. In App
+mode, each operator owns and stores their own App key; MAGI never distributes a
+shared private key. See [authentication modes](authentication.md).
+
+A single publicly installed MAGI bot with browser-only onboarding would require a
+separate trusted service design. It is not required or planned for these two modes.

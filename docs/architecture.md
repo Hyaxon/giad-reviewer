@@ -3,6 +3,10 @@
 Status: accepted component boundaries; interfaces below are illustrative, not
 implemented contracts.
 
+Authentication uses the [shared provider boundary](authentication.md): personal
+GitHub account or user-owned App. The core review workflow is independent of that
+choice. Provider selection is planned, not yet implemented.
+
 ## Component flow
 
 ```mermaid
@@ -17,7 +21,7 @@ flowchart TD
     Model --> Ollama[Native Ollama]
     Agents --> Validation[Finding validation and preview]
     Validation --> Confirm[Human publication confirmation]
-    Confirm --> Publisher[One MAGI App: COMMENT reviews]
+    Confirm --> Publisher[Selected user or App: COMMENT reviews]
 ```
 
 The first implementation runs only MELCHIOR. The eventual sequence is MELCHIOR,
@@ -65,7 +69,7 @@ type Model interface {
 ## Review lifecycle
 
 1. Resolve repository and PR from explicit input or the current Git directory.
-2. Load trusted local configuration and authenticate the GitHub App installation.
+2. Load trusted local configuration and authenticate through the selected user/App provider.
 3. Fetch metadata, changed files, diff, base/head SHAs, and formal issue links.
 4. Prepare an isolated checkout of the intended PR revision.
 5. Seed the selected reviewer with policy and bounded context.

@@ -5,7 +5,7 @@ Local-first GitHub pull-request review in Go.
 MELCHIOR focuses on correctness, BALTHASAR on requirements and tests, and
 CASPER on security and performance. The design runs reviewers sequentially
 through local Ollama models and publishes COMMENT-only feedback through
-one shared MAGI GitHub App. Each review names its reviewer role. Humans own
+a personal GitHub account or one shared, user-owned MAGI GitHub App. Each review names its reviewer role. Humans own
 resolution and merge decisions.
 
 Inspired by the MAGI supercomputer system from Evangelion.
@@ -19,8 +19,9 @@ setup, security, and the implementation roadmap. The [decision log](docs/decisio
 records updates to the original PDF, including one shared App and repository
 selection per command.
 
-The current implementation is a scaffold with help/version output. Configuration
-loading, GitHub authentication, and reviews are not implemented. See
+The CLI supports help/version output, personal authentication verification, and
+read-only PR context retrieval.
+App identity/key/JWT helpers exist, but reviews and App token exchange are not implemented. See
 [current status](docs/status.md) and the [Go orientation guide](docs/go-development.md).
 
 ## Build and run
@@ -41,7 +42,7 @@ go run ./cmd/magi --help
 ```
 
 Check the scaffold with `go test ./...` and `go vet ./...`.
-There are no automated tests yet.
+Unit tests cover identity loading, key/JWT helpers, and personal authentication.
 
 ## Continuous integration
 
@@ -78,9 +79,34 @@ to fix manually. CI checks formatting without changing files. Markdown line-leng
 limits are disabled so long tables and links remain readable in source.
 
 The CLI uses [Cobra](https://cobra.dev/docs/tutorials/getting-started/).
-The guide's JWT and TOML dependencies are optional and will be added when
-authentication and configuration loading use them. `go mod tidy` removes unused
-dependencies, so adding them to this scaffold alone would not retain them.
+JWT and TOML libraries support the optional App helpers already in progress.
+
+## Personal authentication
+
+Personal mode is the initial CLI path. Install GitHub CLI, then run:
+
+```sh
+gh auth login --hostname github.com
+go run ./cmd/magi auth status
+```
+
+If already signed in, just run the status command. It verifies the effective
+account with GitHub and never prints the token. No identity file, App, or private
+key is needed. GitHub CLI environment overrides such as `GH_TOKEN` affect the
+account used. This verifies identity, not write access to every repository.
+
+Read PR metadata with either form:
+
+```sh
+go run ./cmd/magi pr view https://github.com/OWNER/REPO/pull/42
+go run ./cmd/magi pr view 42 --repo OWNER/REPO
+```
+
+This prints the description, base/head revisions, changed files, and formal linked
+issues. Add `--diff` to display the fetched unified diff. Issue retrieval failures
+are shown as warnings, distinct from having no linked issues.
+Reviews, when implemented, will appear under that account. Dedicated App setup
+is deferred; existing App helpers are preserved. See [authentication](docs/authentication.md).
 
 ## Package layout
 
@@ -89,7 +115,8 @@ dependencies, so adding them to this scaffold alone would not retain them.
 | `cmd/magi` | CLI entry point |
 | `internal/agent` | Reviewer state machine and controlled tool loop |
 | `internal/config` | TOML and environment configuration |
-| `internal/githubapp` | App JWTs, installation tokens, PR APIs and publishing |
+| `internal/githubauth` | Shared token provider and personal GitHub CLI authentication |
+| `internal/githubapp` | App key/JWT helpers; future installation-token provider |
 | `internal/model` | Provider-independent model interface |
 | `internal/model/ollama` | Ollama HTTP adapter and model unloading |
 | `internal/review` | Review runner, findings and publication validation |

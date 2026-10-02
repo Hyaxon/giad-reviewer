@@ -18,6 +18,7 @@ type GitHubConfig struct {
 
 type AppIdentity struct {
 	AppID          int64  `toml:"app_id"`
+	ClientID       string `toml:"client_id"`
 	InstallationID int64  `toml:"installation_id"`
 	PrivateKey     string `toml:"private_key"`
 }
@@ -50,6 +51,12 @@ func LoadIdentity(path string) (IdentityConfig, error) {
 func (identity AppIdentity) validate() error {
 	if identity.AppID <= 0 {
 		return fmt.Errorf("app_id must be greater than zero")
+	}
+	if strings.TrimSpace(identity.ClientID) == "" {
+		return fmt.Errorf("client_id must not be empty")
+	}
+	if identity.ClientID != strings.TrimSpace(identity.ClientID) {
+		return fmt.Errorf("client_id must not contain surrounding whitespace")
 	}
 
 	if identity.InstallationID <= 0 {

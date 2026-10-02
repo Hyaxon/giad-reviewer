@@ -11,7 +11,7 @@ shared App installed across personal repositories and a local key; API validatio
 
 ## 1. Configuration loading
 
-Build typed settings and deliberate lookup/override rules. Support one App identity,
+Build typed settings and deliberate lookup/override rules. Support explicit user/App auth selection, optional App identity,
 per-role models, endpoints, and review policy. Keep repositories as invocation inputs.
 
 Acceptance: parse representative settings; reject missing/invalid values and
@@ -20,13 +20,19 @@ without leaking credentials. Add focused parsing/validation tests.
 
 ## 2. Authentication and PR acquisition
 
+Personal mode is the first implementation path. Its provider and read-only
+`magi auth status` check exist. Next, use that provider to fetch PR context. Defer
+App installation-token exchange and the App setup branch until the local personal
+review flow works. Existing App helpers remain available for that later work.
+
 Implement App JWTs, installation tokens, cancellation, and HTTP errors. Resolve
 PR URLs, explicit repositories, and local remotes. Fetch title/body, base/head SHAs,
 changed files, and diff through the App identity.
 
 Acceptance: read a real accessible PR without posting; test expiration/errors;
 reject conflicting or ambiguous targets; do not assume a `main` base or depend on
-a personal `gh` token. Choose a test PR when ready for live verification.
+a personal `gh` token in App mode. Add a separate user provider for explicit
+personal mode, reusing the same GitHub client and review pipeline. Choose a test PR when ready for live verification.
 
 ## 2a. Interactive onboarding
 

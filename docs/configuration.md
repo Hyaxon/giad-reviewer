@@ -5,7 +5,8 @@ currently read by the CLI.
 
 ## What belongs in configuration
 
-- One shared GitHub App identity and local private-key path.
+- Authentication mode: personal account or a dedicated user-owned GitHub App.
+- App identity and private-key path only when App mode is selected.
 - Model choice for each reviewer and configurable inference endpoints.
 - Sequential execution, context budgets, and unload policy.
 - Publication thresholds and preview behavior.
@@ -14,6 +15,10 @@ currently read by the CLI.
 The repository and PR are invocation inputs. The three roles do not need three
 credential blocks. The PDF's `[github.melchior]`, `[github.balthasar]`, and
 `[github.casper]` examples are superseded.
+
+The proposed mode selector and migration from the current identity file are described
+in [authentication modes](authentication.md). The existing loader handles App identity
+only; it must not be required by future personal-account mode.
 
 ## Existing example
 

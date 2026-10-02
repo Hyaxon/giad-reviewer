@@ -44,6 +44,7 @@ func TestLoadIdentityHomePath(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "identity.toml")
 	content := `[github.magi]
+client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
 private_key = "~/.config/magi/keys/magi.pem"
@@ -64,6 +65,7 @@ private_key = "~/.config/magi/keys/magi.pem"
 func TestLoadIdentityUnsupportedHomePath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 	content := `[github.magi]
+client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
 private_key = "~another-user/key.pem"

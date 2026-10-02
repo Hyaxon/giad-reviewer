@@ -7,11 +7,21 @@ import (
 	"testing"
 )
 
+func TestAppIdentityClientID(t *testing.T) {
+	for _, clientID := range []string{"", "   ", " Iv1.example"} {
+		identity := AppIdentity{AppID: 123, ClientID: clientID, InstallationID: 456, PrivateKey: "/example/key.pem"}
+		if err := identity.validate(); err == nil || !strings.Contains(err.Error(), "client_id") {
+			t.Errorf("client ID %q: expected client_id validation error, got %v", clientID, err)
+		}
+	}
+}
+
 func TestLoadIdentity(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
 [github.magi]
+client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
 private_key = "/example/magi.pem"
@@ -28,6 +38,7 @@ private_key = "/example/magi.pem"
 
 	want := AppIdentity{
 		AppID:          123,
+		ClientID:       "Iv1.example",
 		InstallationID: 456,
 		PrivateKey:     "/example/magi.pem",
 	}
@@ -66,6 +77,7 @@ func TestLoadIdentityInvalidAppId(t *testing.T) {
 
 	content := `
 [github.magi]
+client_id = "Iv1.example"
 app_id = -123
 installation_id = 456
 private_key = "/example/magi.pem"
@@ -91,6 +103,7 @@ func TestLoadIdentityInvalidAppIdType(t *testing.T) {
 
 	content := `
 [github.magi]
+client_id = "Iv1.example"
 app_id = "abc"
 installation_id = 456
 private_key = "/example/magi.pem"
@@ -115,6 +128,7 @@ func TestLoadIdentityInvalidInstallationId(t *testing.T) {
 
 	content := `
 [github.magi]
+client_id = "Iv1.example"
 app_id = 123
 installation_id = -456
 private_key = "/example/magi.pem"
@@ -140,6 +154,7 @@ func TestLoadIdentityInvalidPrivateKey(t *testing.T) {
 
 	content := `
 [github.magi]
+client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
 private_key = ""

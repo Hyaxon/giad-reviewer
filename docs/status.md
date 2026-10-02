@@ -1,50 +1,41 @@
 # Current status
 
-Snapshot: September 30, 2026. This is a scaffold, not a working review tool.
+Snapshot: October 1, 2026. Authentication groundwork exists; reviews do not yet run.
 
-## Implemented and inspected
+## Implemented
 
-| Item | State |
-| --- | --- |
-| Go module | `github.com/hyaxon/magi-agents`, Go directive `1.27.1` |
-| CLI | Cobra root command in `cmd/magi/main.go` |
-| Help | Running `magi` or `magi --help` prints the scaffold description |
-| Version | `magi --version` prints the development version |
-| Dependencies | Cobra plus its indirect dependencies; no JWT or TOML library yet |
-| Package boundaries | `internal/*/doc.go` files reserve responsibilities |
-| Prompts | A README only; no operational reviewer prompts |
-| Configuration | `magi.example.toml` exists but is not loaded by the program |
-| Tests | No automated test cases yet |
+- Cobra CLI: help, version, `magi auth status`, and `magi pr view`.
+- Read-only PR context retrieval by URL or number plus `--repo`: metadata, changed
+  files, unified diff, and formal linked issues. `--diff` displays the patch.
+- Personal token provider using `gh auth token --hostname github.com`.
+- Read-only GitHub identity verification; tokens are not displayed or saved in TOML.
+- Provider interface with repository context for future App authentication.
+- Optional App identity loading/validation, home-path expansion, PEM parsing,
+  and client-ID JWT signing. Personal mode does not load these credentials.
+- Tests for configuration, keys, JWTs, and personal authentication.
+- CI formatting, vet, tests, build, and Markdown lint checks.
 
-The scaffold previously built successfully and passed `go vet ./...`.
-`go test ./...` completed with no test files; that is not evidence of review behavior.
+## Setup
 
-## Local setup evidence
+Run `gh auth login --hostname github.com` if needed, then
+`go run ./cmd/magi auth status`. This checks the effective user token, including
+GitHub CLI environment overrides. Repository-specific permissions are checked later.
 
-- Go `1.27.1` was available when the scaffold was created.
-- Ollama's model list confirmed `qwen3.6:27b`, `devstral-small-2:latest`, and
-  `qwen3-coder:30b` were downloaded. Inference smoke tests have not been recorded.
-- The owner reports creating one personal-account MAGI GitHub App and installing
-  it with access to all their repositories.
-- The owner supplied App and Installation IDs and reports storing the key at
-  `~/.config/magi/keys/magi.pem`. The key and API authentication have not been validated.
+The initial Ollama models were confirmed downloaded during scaffold setup.
+The owner also reports a configured App and local key, but App integration is
+now deferred. General runtime/model TOML loading and the setup wizard are not wired
+into the CLI.
 
-Actual App permissions and repository access still need a live authentication
-check during implementation. No repository is permanently selected.
+## Next milestone
 
-## Not implemented
+Prepare an isolated checkout bound to the fetched PR revisions, then add controlled
+repository-reading tools and the first model/tool review loop.
 
-Configuration parsing; credential loading; App JWTs; installation tokens;
-repository inference; PR fetching; linked issues; worktrees; model inference;
-tool execution; finding validation; preview/confirmation; publication; worker
-and coordinator modes.
+Changed files and formal issue links are paginated. Linked-issue failures are explicit
+warnings. PR revisions are rechecked after retrieval; changed revisions fail the
+command. GitHub responses are capped at 16 MiB each, file listings at GitHub's 3000
+files, and issue retrieval at 1000 issues. These are retrieval guards, not an atomic
+snapshot guarantee; revalidate again before eventual publication.
 
-The scaffold's CLI help still mentions separate GitHub Apps. That text reflects
-the original PDF and is superseded by the [single-App decision](decisions.md).
-It is recorded here rather than changed as part of this documentation-only task.
-
-## Immediate next milestone
-
-Implement configuration loading with one shared GitHub identity, then read-only
-authentication and PR context retrieval. See [the roadmap](roadmap.md) for
-acceptance criteria. Creating these docs does not implement those milestones.
+Repository inference, local checkout, installation-token exchange, model inference,
+review publication, setup, worker, and coordinator modes remain unimplemented.
