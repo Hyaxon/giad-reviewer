@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/hyaxon/magi-agents/internal/githubauth"
+	"github.com/hyaxon/agentic-review/internal/githubauth"
 )
 
 type ChangedFile struct {

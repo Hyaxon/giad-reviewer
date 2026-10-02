@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hyaxon/magi-agents/internal/githubapi"
-	"github.com/hyaxon/magi-agents/internal/githubauth"
+	"github.com/hyaxon/agentic-review/internal/githubapi"
+	"github.com/hyaxon/agentic-review/internal/githubauth"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +19,8 @@ func newPRCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "pr", Short: "Read GitHub pull requests"}
 	client := githubapi.NewClient(githubauth.UserAuth{})
 	cmd.AddCommand(newPRViewCommand(client.GetPRContext))
+	cmd.AddCommand(newCheckoutCommand())
+	cmd.AddCommand(newInspectCommand())
 	return cmd
 }
 
@@ -28,7 +30,7 @@ func newPRViewCommand(fetch fetchPullRequest) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "view <PR-URL|number>",
 		Short:   "Read PR metadata, changed files, and linked issues",
-		Example: "  magi pr view https://github.com/OWNER/REPO/pull/42\n  magi pr view 42 --repo OWNER/REPO",
+		Example: "  agentic-review pr view https://github.com/OWNER/REPO/pull/42\n  agentic-review pr view 42 --repo OWNER/REPO",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repo, number, err := parsePRTarget(args[0], repository)

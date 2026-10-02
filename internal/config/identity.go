@@ -13,7 +13,9 @@ type IdentityConfig struct {
 }
 
 type GitHubConfig struct {
-	MAGI AppIdentity `toml:"magi"`
+	App AppIdentity `toml:"app"`
+	// LegacyApp accepts the pre-split identity file without rewriting local credentials.
+	LegacyApp AppIdentity `toml:"magi"`
 }
 
 type AppIdentity struct {
@@ -35,15 +37,23 @@ func LoadIdentity(path string) (IdentityConfig, error) {
 		return IdentityConfig{}, fmt.Errorf("parse identity file: %w", err)
 	}
 
-	if err := identity.GitHub.MAGI.validate(); err != nil {
+	if identity.GitHub.LegacyApp != (AppIdentity{}) {
+		if identity.GitHub.App != (AppIdentity{}) {
+			return IdentityConfig{}, fmt.Errorf("use only [github.app]; legacy [github.magi] cannot be combined")
+		}
+		identity.GitHub.App = identity.GitHub.LegacyApp
+		identity.GitHub.LegacyApp = AppIdentity{}
+	}
+
+	if err := identity.GitHub.App.validate(); err != nil {
 		return IdentityConfig{}, fmt.Errorf("validate identity: %w", err)
 	}
 
-	keyPath, err := expandHomePath(identity.GitHub.MAGI.PrivateKey)
+	keyPath, err := expandHomePath(identity.GitHub.App.PrivateKey)
 	if err != nil {
 		return IdentityConfig{}, fmt.Errorf("resolve private_key: %w", err)
 	}
-	identity.GitHub.MAGI.PrivateKey = keyPath
+	identity.GitHub.App.PrivateKey = keyPath
 
 	return identity, nil
 }

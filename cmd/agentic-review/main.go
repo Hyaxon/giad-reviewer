@@ -13,16 +13,13 @@ var version = "dev"
 
 func main() {
 	cmd := &cobra.Command{
-		Use:   "magi",
-		Short: "Local-first code review with the three MAGI reviewers",
-		Long: `MAGI is a local-first GitHub pull-request review system.
+		Use:   "agentic-review",
+		Short: "Local runtime for independent review agents",
+		Long: `Agentic Review prepares GitHub pull requests and brokers controlled
+repository and model capabilities for separately installed review agents.
 
-MELCHIOR reviews correctness, BALTHASAR requirements and tests, and
-CASPER security and performance. Reviews will run sequentially through
-Ollama and publish COMMENT-only feedback using your personal GitHub account.
-Dedicated GitHub App authentication will be available later.
-
-This is the project scaffold. The review workflow is not implemented yet.`,
+Use agentic-review review with an explicit trusted agent manifest to preview a
+local draft. GitHub publication and sandboxed test execution are not implemented.`,
 		Version:       version,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
@@ -33,10 +30,11 @@ This is the project scaffold. The review workflow is not implemented yet.`,
 	}
 	cmd.AddCommand(newAuthCommand())
 	cmd.AddCommand(newPRCommand())
+	cmd.AddCommand(newReviewCommand())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "magi:", err)
+		fmt.Fprintln(os.Stderr, "agentic-review:", err)
 		os.Exit(1)
 	}
 }

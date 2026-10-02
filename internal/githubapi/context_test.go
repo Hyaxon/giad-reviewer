@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyaxon/magi-agents/internal/githubauth"
+	"github.com/hyaxon/agentic-review/internal/githubauth"
 )
 
 type fakeAuth struct{}

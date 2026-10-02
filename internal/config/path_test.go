@@ -19,9 +19,9 @@ func TestExpandHomePath(t *testing.T) {
 		want string
 	}{
 		{"home", "~", homeDir},
-		{"home key", "~/.config/magi/keys/magi.pem", filepath.Join(homeDir, ".config", "magi", "keys", "magi.pem")},
-		{"absolute", "/example/magi.pem", "/example/magi.pem"},
-		{"relative", "keys/magi.pem", "keys/magi.pem"},
+		{"home key", "~/.config/agentic-review/keys/agentic-review.pem", filepath.Join(homeDir, ".config", "agentic-review", "keys", "agentic-review.pem")},
+		{"absolute", "/example/agentic-review.pem", "/example/agentic-review.pem"},
+		{"relative", "keys/agentic-review.pem", "keys/agentic-review.pem"},
 		{"spaces", "keys/my key.pem", "keys/my key.pem"},
 		{"literal variable", "$HOME/key.pem", "$HOME/key.pem"},
 	} {
@@ -43,11 +43,11 @@ func TestLoadIdentityHomePath(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "identity.toml")
-	content := `[github.magi]
+	content := `[github.app]
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
-private_key = "~/.config/magi/keys/magi.pem"
+private_key = "~/.config/agentic-review/keys/agentic-review.pem"
 `
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
@@ -56,15 +56,15 @@ private_key = "~/.config/magi/keys/magi.pem"
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(homeDir, ".config", "magi", "keys", "magi.pem")
-	if got := identity.GitHub.MAGI.PrivateKey; got != want {
+	want := filepath.Join(homeDir, ".config", "agentic-review", "keys", "agentic-review.pem")
+	if got := identity.GitHub.App.PrivateKey; got != want {
 		t.Errorf("private key path = %q, want %q", got, want)
 	}
 }
 
 func TestLoadIdentityUnsupportedHomePath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
-	content := `[github.magi]
+	content := `[github.app]
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456

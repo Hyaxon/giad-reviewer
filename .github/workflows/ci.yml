@@ -70,9 +70,9 @@ jobs:
         run: go test -race -count=1 ./...
 
       - name: Build CLI
-        run: go build -trimpath -o bin/magi ./cmd/magi
+        run: go build -trimpath -o bin/agentic-review ./cmd/agentic-review
 
       - name: Smoke-test CLI
         run: |
-          ./bin/magi --help
-          ./bin/magi --version
+          ./bin/agentic-review --help
+          ./bin/agentic-review --version

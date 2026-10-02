@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hyaxon/magi-agents/internal/githubauth"
+	"github.com/hyaxon/agentic-review/internal/githubauth"
 )
 
 type Client struct {
@@ -70,7 +70,7 @@ func (c *Client) request(ctx context.Context, repo githubauth.Repository, method
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", accept)
 	req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
-	req.Header.Set("User-Agent", "magi")
+	req.Header.Set("User-Agent", "agentic-review")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

@@ -20,7 +20,7 @@ func TestLoadIdentity(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
-[github.magi]
+[github.app]
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
@@ -43,8 +43,8 @@ private_key = "/example/magi.pem"
 		PrivateKey:     "/example/magi.pem",
 	}
 
-	if got := identity.GitHub.MAGI; got != want {
-		t.Errorf("MAGI identity = %+v, want %+v", got, want)
+	if got := identity.GitHub.App; got != want {
+		t.Errorf("App identity = %+v, want %+v", got, want)
 	}
 }
 
@@ -60,7 +60,7 @@ func TestLoadIdentityMissingFile(t *testing.T) {
 func TestLoadIdentityInvalidTOML(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
-	content := "[github.magi" // Missing the closing bracket.
+	content := "[github.app" // Missing the closing bracket.
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
@@ -76,7 +76,7 @@ func TestLoadIdentityInvalidAppId(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
-[github.magi]
+[github.app]
 client_id = "Iv1.example"
 app_id = -123
 installation_id = 456
@@ -102,7 +102,7 @@ func TestLoadIdentityInvalidAppIdType(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
-[github.magi]
+[github.app]
 client_id = "Iv1.example"
 app_id = "abc"
 installation_id = 456
@@ -127,7 +127,7 @@ func TestLoadIdentityInvalidInstallationId(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
-[github.magi]
+[github.app]
 client_id = "Iv1.example"
 app_id = 123
 installation_id = -456
@@ -153,7 +153,7 @@ func TestLoadIdentityInvalidPrivateKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "identity.toml")
 
 	content := `
-[github.magi]
+[github.app]
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
@@ -172,5 +172,28 @@ private_key = ""
 	want := "validate identity: private_key must not be empty"
 	if err.Error() != want {
 		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestLegacyIdentityMigration(t *testing.T) {
+	content := `[github.magi]
+app_id = 1
+client_id = "client"
+installation_id = 2
+private_key = "/example/key.pem"
+`
+	path := filepath.Join(t.TempDir(), "identity.toml")
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := LoadIdentity(path)
+	if err != nil || identity.GitHub.App.AppID != 1 || identity.GitHub.LegacyApp != (AppIdentity{}) {
+		t.Fatalf("identity=%+v err=%v", identity, err)
+	}
+	if err := os.WriteFile(path, []byte(content+"\n[github.app]\napp_id = 3\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadIdentity(path); err == nil {
+		t.Fatal("ambiguous old and new identity blocks accepted")
 	}
 }

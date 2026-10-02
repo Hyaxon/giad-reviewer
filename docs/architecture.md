@@ -1,100 +1,53 @@
-# Architecture
+# Runtime design
 
-Status: accepted component boundaries; interfaces below are illustrative, not
-implemented contracts.
+Agentic Review owns execution and access. Separate agents own review judgment.
+A composite agent such as MAGI is one installed package; its internal reviewer
+names and prompts never belong in this runtime.
 
-Authentication uses the [shared provider boundary](authentication.md): personal
-GitHub account or user-owned App. The core review workflow is independent of that
-choice. Provider selection is planned, not yet implemented.
+A review follows this sequence:
 
-## Component flow
-
-```mermaid
-flowchart TD
-    CLI[CLI invocation] --> Runner[Review runner]
-    Runner --> GH[GitHub adapter: metadata, diff, linked issues]
-    Runner --> Repo[Isolated PR checkout]
-    Runner --> Agents[Sequential reviewer sessions]
-    Agents --> Tools[Controlled repository tools]
-    Tools --> Repo
-    Agents --> Model[Model interface]
-    Model --> Ollama[Native Ollama]
-    Agents --> Validation[Finding validation and preview]
-    Validation --> Confirm[Human publication confirmation]
-    Confirm --> Publisher[Selected user or App: COMMENT reviews]
+```text
+GitHub PR → verified checkout + base instructions → agent process
+                                                    ↕
+                                            repository/model broker
+                                                    ↓
+                                              draft preview
 ```
 
-The first implementation runs only MELCHIOR. The eventual sequence is MELCHIOR,
-BALTHASAR, CASPER, with explicit model unloading between sessions. Independent
-reasoning does not require independent GitHub identities.
+## Code layout
 
-## Package boundaries
-
-| Package | Owns |
+| Location | Responsibility |
 | --- | --- |
-| `cmd/magi` | Arguments, terminal output, confirmation, process exit |
-| `internal/config` | Load, validate, and resolve local configuration |
-| `internal/githubapp` | App authentication, GitHub reads, review publication |
-| `internal/review` | Review orchestration, findings, results, publication policy |
-| `internal/agent` | Reviewer state machine and model/tool conversation |
-| `internal/model` | Provider-independent inference contracts |
-| `internal/model/ollama` | Ollama transport, options, loading/unloading |
-| `internal/repo` | Checkout preparation, revision boundaries, cleanup |
-| `internal/tools` | Bounded file/search/diff/history/test operations |
-| `internal/sandbox` | Future isolated execution of PR code |
-| `internal/worker` | Future job leases and worker lifecycle |
-| `internal/coordinator` | Future scheduling, durable job state, retries |
+| `cmd/agentic-review` | CLI and output |
+| `internal/review`, `internal/agents` | Orchestration, process launch, capability checks, draft validation |
+| `internal/github*`, `internal/repo`, `internal/instructions` | Authentication, PR context, disposable checkouts, base-revision AGENTS.md |
+| `internal/tools`, `internal/model` | Bounded repository access and Ollama profiles/lifecycle |
+| `pkg/protocol` | Shared agent wire contract |
 
-The review engine must not import CLI or Docker-specific behavior. Triggering a
-review from a terminal, webhook, or worker should call the same underlying runner.
+The runtime verifies exact base/head commits and removes temporary resources after
+use. Agents receive normalized PR/issue data and scoped `AGENTS.md` guidance from
+the **base revision only**. Head edits and other repository text remain evidence.
 
-```go
-// Illustrative shape; types and names may evolve during implementation.
-type ReviewRequest struct {
-    Repository  string
-    PullRequest int
-    HeadSHA     string
-}
+Agents request only declared and granted capabilities. GitHub credentials stay in
+the host; model endpoints/tags come from host configuration. Models remain loaded
+between calls, unload before profile switches, and unload on session cleanup.
 
-type ReviewRunner interface {
-    Review(ctx context.Context, req ReviewRequest) (ReviewResult, error)
-}
+The broker offers no shell, tests, writes, web, browser, or publication operation.
+Agent binaries still run as the local user: process separation is not OS isolation.
+Draft checks validate structure and inspected line anchors, not whether a finding
+is true. An aborted session fails rather than reporting a clean review.
 
-type Model interface {
-    Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
-    Unload(ctx context.Context) error
-}
-```
+## Next steps
 
-## Review lifecycle
+1. Validate the contract with an independently installed agent.
+2. Harden agent isolation and process cleanup.
+3. Add human-confirmed, revision-bound COMMENT publication, then App auth/setup
+   and sandboxed test execution. Workers can wait.
 
-1. Resolve repository and PR from explicit input or the current Git directory.
-2. Load trusted local configuration and authenticate through the selected user/App provider.
-3. Fetch metadata, changed files, diff, base/head SHAs, and formal issue links.
-4. Prepare an isolated checkout of the intended PR revision.
-5. Seed the selected reviewer with policy and bounded context.
-6. Alternate model responses and controlled tool observations within budgets.
-7. Ask that reviewer to try to disprove its candidate findings.
-8. Validate findings and requirements assessments; retain uncertain states explicitly.
-9. Unload the model before starting a different reviewer's session.
-10. Preview results and obtain publication confirmation.
-11. Recheck the target revision and publish validated COMMENT reviews.
-12. Clean up temporary resources on success, failure, or cancellation.
+## Migration
 
-Base/head SHAs are review boundaries. Do not assume the base branch is `main`.
-Before publication, detect a changed PR head and require a fresh review rather than
-silently reusing findings from older code. The exact stale-review UX remains open.
-
-## Shared data, separate responsibilities
-
-A shared review context contains PR metadata, source revisions, diff information,
-and linked-issue context. BALTHASAR additionally consumes structured requirements.
-Not every reviewer needs the full text of every issue in its active context.
-
-Agents return data, not API calls. Validation checks confidence, evidence,
-coordinates, and policy. Publication renders that data under the shared MAGI
-identity, with each review clearly naming its reviewer role.
-
-Network errors, invalid model output, unavailable issue context, and test failures
-must remain distinguishable. A failed reviewer is not a clean review. Never report
-"no findings" as if a session completed when it actually aborted.
+The module and CLI are now `agentic-review`; the folder/remote rename is still pending.
+The former role/model flags were replaced by manifests and config. Original MAGI
+source is saved in [migration/magi](../migration/magi/README.md), with historical
+docs in a single ZIP alongside it. This design follows the local
+`Agentic_Review_MAGI_Architecture_and_Setup.pdf`.

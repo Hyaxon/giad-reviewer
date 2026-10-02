@@ -1,5 +1,5 @@
-[github.magi]
+[github.app]
 app_id = 1111111
 client_id = "REPLACE_WITH_YOUR_APP_CLIENT_ID"
 installation_id = 111111111
-private_key = "~/.config/magi/keys/magi.pem"
+private_key = "~/.config/agentic-review/keys/github-app.pem"

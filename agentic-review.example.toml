@@ -1,0 +1,19 @@
+# Copy to an explicitly selected trusted config file; no automatic lookup exists.
+# Replace the example model tag with a downloaded model you want to evaluate.
+[models.review]
+provider = "ollama"
+endpoint = "http://127.0.0.1:11434"
+model = "qwen3.6:27b"
+
+# Agent names match manifests. This runtime does not contain the reviewer package.
+[agents.reviewer]
+capabilities = [
+  "repository.read",
+  "repository.search",
+  "git.diff",
+  "repository.instructions",
+  "github.linked_issues",
+  "model.chat",
+]
+
+# tests.run, workspace.write, web.search and browser are currently unavailable.

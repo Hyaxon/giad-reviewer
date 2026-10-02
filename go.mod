@@ -1,4 +1,4 @@
-module github.com/hyaxon/magi-agents
+module github.com/hyaxon/agentic-review
 
 go 1.27.1
 

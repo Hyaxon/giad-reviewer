@@ -1,0 +1,21 @@
+{
+  "apiVersion": "agentic-review/v1",
+  "name": "reviewer",
+  "version": "0.1.0",
+  "entrypoint": {
+    "command": "/absolute/path/to/your/reviewer",
+    "args": ["agent", "--stdio"]
+  },
+  "capabilities": {
+    "required": [
+      "repository.read",
+      "repository.search",
+      "git.diff",
+      "repository.instructions",
+      "github.linked_issues",
+      "model.chat"
+    ],
+    "optional": ["tests.run", "web.search"]
+  },
+  "modelProfiles": ["review"]
+}

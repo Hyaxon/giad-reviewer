@@ -1,2 +1,2 @@
-// Package model will define provider-independent inference contracts.
+// Package model defines provider-independent inference contracts.
 package model

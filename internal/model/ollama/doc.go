@@ -1,2 +1,2 @@
-// Package ollama will adapt Ollama HTTP inference and explicit model unloading.
+// Package ollama adapts native Ollama chat, tool calling, and explicit model unloading.
 package ollama

@@ -8,3 +8,6 @@
 .DS_Store
 *.pdf
 identity.toml
+/agentic-review
+/agentic-review.toml
+/migration
