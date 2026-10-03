@@ -5,10 +5,11 @@ and [model.go](../pkg/protocol/model.go); use those as the schema reference.
 
 ## Launch and framing
 
-Use [the manifest example](../examples/agent.manifest.json) with
-`apiVersion: "agentic-review/v1"`, a name/version, an absolute executable path,
+Use [the manifest example](../example/agent.manifest.json) with
+`apiVersion: "giad/v1"`, a name/version, an absolute executable path,
 capability declarations, and logical model profiles. The runtime passes arguments
-directly and launches in an empty directory with a minimal environment.
+directly and launches in an empty directory with a minimal environment. This is
+currently a trusted process, not an OS sandbox.
 
 Communication uses newline-delimited UTF-8 JSON over stdin/stdout, one request
 outstanding at a time. This is a custom framed protocol, not JSON-RPC. Reserve
@@ -30,13 +31,13 @@ Every request includes the API version, a unique nonempty string ID, method, and
 object params. IDs/methods are at most 128 bytes. For example:
 
 ```json
-{"apiVersion":"agentic-review/v1","id":"1","method":"repository.read","params":{"path":"src/example.go","start":1,"end":80}}
+{"apiVersion":"giad/v1","id":"1","method":"repository.read","params":{"path":"src/example.go","start":1,"end":80}}
 ```
 
 The host replies with the same ID and either `result` or an `error` string:
 
 ```json
-{"apiVersion":"agentic-review/v1","id":"1","result":{"Text":"1: package example\n","Truncated":false,"SkippedFiles":0}}
+{"apiVersion":"giad/v1","id":"1","result":{"Text":"1: package example\n","Truncated":false,"SkippedFiles":0}}
 ```
 
 | Method | Params | Result |
@@ -86,3 +87,7 @@ Limits: 1 MiB frames; 256 KiB initial job; 64 requests/4 MiB incoming data;
 16 model calls/96 KiB per model request; 64 KiB reports with at most 20 findings
 and 8 KiB text fields. Tool/provider limits also apply. The command deadline defaults
 to 30 minutes; model cleanup gets a separate 30 seconds after cancellation.
+
+Old `agentic-review/v1` frames/manifests are incompatible and explicitly rejected.
+`make smoke` launches the real [diff-inspector](../example/diff-inspector/main.go)
+through the host broker without GitHub or Ollama.

@@ -33,7 +33,7 @@ func verifyUser(ctx context.Context, auth Provider, client *http.Client) (string
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
-	req.Header.Set("User-Agent", "agentic-review")
+	req.Header.Set("User-Agent", "giad")
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("verify GitHub identity: %w", err)

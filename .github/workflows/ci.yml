@@ -69,10 +69,10 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
-      - name: Build CLI
-        run: go build -trimpath -o bin/agentic-review ./cmd/agentic-review
+      - name: Build CLI and example agent
+        run: make all
 
       - name: Smoke-test CLI
         run: |
-          ./bin/agentic-review --help
-          ./bin/agentic-review --version
+          ./bin/giad --help
+          ./bin/giad --version

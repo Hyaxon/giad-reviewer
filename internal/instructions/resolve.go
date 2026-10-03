@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 type BaseReader interface {

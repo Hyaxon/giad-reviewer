@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubauth"
 )
 
 type LinkedIssue struct {

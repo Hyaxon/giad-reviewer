@@ -13,12 +13,12 @@ var version = "dev"
 
 func main() {
 	cmd := &cobra.Command{
-		Use:   "agentic-review",
+		Use:   "giad",
 		Short: "Local runtime for independent review agents",
-		Long: `Agentic Review prepares GitHub pull requests and brokers controlled
+		Long: `GIAD prepares GitHub pull requests and brokers controlled
 repository and model capabilities for separately installed review agents.
 
-Use agentic-review review with an explicit trusted agent manifest to preview a
+Use giad review with an explicit trusted agent manifest to preview a
 local draft. GitHub publication and sandboxed test execution are not implemented.`,
 		Version:       version,
 		Args:          cobra.NoArgs,
@@ -34,7 +34,7 @@ local draft. GitHub publication and sandboxed test execution are not implemented
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "agentic-review:", err)
+		fmt.Fprintln(os.Stderr, "giad:", err)
 		os.Exit(1)
 	}
 }

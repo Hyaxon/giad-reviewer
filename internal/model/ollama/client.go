@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hyaxon/agentic-review/internal/model"
+	"github.com/hyaxon/giad/internal/model"
 )
 
 // Client uses the native Ollama API. No GitHub credentials are sent to it.

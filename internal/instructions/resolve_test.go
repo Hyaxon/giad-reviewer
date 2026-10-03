@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 type baseFiles map[string]string

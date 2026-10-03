@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hyaxon/agentic-review/internal/githubapi"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubapi"
+	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ func newPRViewCommand(fetch fetchPullRequest) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "view <PR-URL|number>",
 		Short:   "Read PR metadata, changed files, and linked issues",
-		Example: "  agentic-review pr view https://github.com/OWNER/REPO/pull/42\n  agentic-review pr view 42 --repo OWNER/REPO",
+		Example: "  giad pr view https://github.com/OWNER/REPO/pull/42\n  giad pr view 42 --repo OWNER/REPO",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repo, number, err := parsePRTarget(args[0], repository)

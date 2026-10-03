@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyaxon/agentic-review/internal/model"
+	"github.com/hyaxon/giad/internal/model"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

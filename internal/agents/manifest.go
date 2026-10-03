@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 func decode(data []byte, target any) error {
@@ -46,7 +46,7 @@ func LoadManifest(path string) (protocol.Manifest, error) {
 		return m, fmt.Errorf("parse agent manifest: %w", err)
 	}
 	if m.APIVersion != protocol.Version {
-		return m, errors.New("unsupported agent apiVersion")
+		return m, fmt.Errorf("unsupported agent apiVersion %q; expected %q", m.APIVersion, protocol.Version)
 	}
 	if strings.TrimSpace(m.Name) == "" || strings.TrimSpace(m.Version) == "" {
 		return m, errors.New("agent name and version are required")

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubauth"
 )
 
 type CheckoutRequest struct {
@@ -78,7 +78,7 @@ func (m Manager) Prepare(ctx context.Context, req CheckoutRequest) (_ *Checkout,
 	if strings.TrimSpace(token) == "" {
 		return nil, fmt.Errorf("checkout credentials are empty")
 	}
-	root, err := os.MkdirTemp(m.TempDir, "agentic-review-")
+	root, err := os.MkdirTemp(m.TempDir, "giad-")
 	if err != nil {
 		return nil, fmt.Errorf("create checkout directory: %w", err)
 	}
@@ -103,10 +103,10 @@ func (m Manager) Prepare(ctx context.Context, req CheckoutRequest) (_ *Checkout,
 	header := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
 	env := []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.https://github.com/.extraHeader", "GIT_CONFIG_VALUE_0=" + header}
 	if _, err = run(ctx, checkout.Path, env, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin",
-		checkout.BaseSHA+":refs/agentic-review/base", fmt.Sprintf("refs/pull/%d/head:refs/agentic-review/head", req.Number)); err != nil {
+		checkout.BaseSHA+":refs/giad/base", fmt.Sprintf("refs/pull/%d/head:refs/giad/head", req.Number)); err != nil {
 		return nil, err
 	}
-	for ref, want := range map[string]string{"refs/agentic-review/base": checkout.BaseSHA, "refs/agentic-review/head": checkout.HeadSHA} {
+	for ref, want := range map[string]string{"refs/giad/base": checkout.BaseSHA, "refs/giad/head": checkout.HeadSHA} {
 		got, gitErr := run(ctx, checkout.Path, nil, "rev-parse", "--verify", ref+"^{commit}")
 		if gitErr != nil {
 			return nil, gitErr

@@ -1,48 +1,51 @@
-# Agentic Review
+# GIAD
 
-A local runtime for independent code-review agents. It handles GitHub access,
-PR checkouts, repository tools, local models, and draft previews. Custom agents such as
-MAGI supply their own prompts and review judgment in separate repositories.
+A self-hosted runtime for programmable pull-request review agents. GIAD handles
+GitHub access, PR checkouts, repository tools, optional local models, and draft
+previews. Agents supply review judgment; MAGI will be an optional separate package.
 
-**Early development:** PR inspection works. Agent reviews require a separately
-installed agent; none ships here yet. Publishing and test execution are not implemented.
+**Prototype:** PR inspection and external-agent previews work. A model-free
+`diff-inspector` example is included. Agent isolation, publishing, and test execution
+are not implemented; run only trusted executables.
 
 ## Get started
 
 Install Go (version in `go.mod`), Git, and GitHub CLI, then:
 
 ```sh
-go build -o bin/agentic-review ./cmd/agentic-review
+make                       # Build GIAD and the example agent/manifest.
+make smoke                 # Offline runtime + real agent integration check.
 gh auth login --hostname github.com
-./bin/agentic-review auth status
-./bin/agentic-review pr view 42 --repo OWNER/REPO --diff
+./bin/giad auth status
+./bin/giad pr view 42 --repo OWNER/REPO --diff
 ```
 
-A full GitHub PR URL also works. Use `pr inspect` to read/search files and
-`pr checkout --keep` to retain a disposable checkout. Run any command with `--help`
-for its options.
-
-## Run an agent
-
-Start Ollama with your chosen model downloaded. Follow [configuration](docs/configuration.md)
-to select an installed agent and grant its capabilities, then:
+Run the example on a PR (no Ollama required):
 
 ```sh
-./bin/agentic-review review 42 --repo OWNER/REPO \
-  --agent-manifest /path/to/agent.json --config /path/to/config.toml
+./bin/giad review 42 --repo OWNER/REPO \
+  --agent-manifest bin/diff-inspector.agent.json \
+  --config example/diff-inspector/config.toml --preview
 ```
 
-Results are local drafts. Add `--json` for structured output. Run only trusted
-agent executables; they are not sandboxed from your computer.
+The example retrieves the diff and returns no findings; it performs no defect
+analysis. All results are local. Add `--json` for structured output. Full GitHub PR
+URLs also work; use `--help` for command options.
+
+## Build your own agent
+
+Start with the [tiny Python example](example/README.md).
+Follow [configuration](docs/configuration.md) and [the protocol](docs/agent-protocol.md).
+Use [giad.example.toml](giad.example.toml) for model-backed agents; model-free agents
+need no model configuration. Start Ollama only when your selected agent uses it.
 
 ## Development
 
 ```sh
-gofmt -w cmd internal pkg
-go vet ./...
-go test -race -count=1 ./...
-npx --yes markdownlint-cli2@0.23.3
+gofmt -w cmd internal pkg example
+make check                 # Module checks, vet, and race tests.
+make lint                  # Pinned Markdown linter.
 ```
 
-See [architecture](docs/architecture.md) for runtime boundaries and next steps,
-and [the protocol](docs/agent-protocol.md) when building an agent.
+[Architecture](docs/architecture.md) explains the boundaries and next milestones.
+The revised `GIAD_Architecture_and_Setup.pdf` is the design reference.

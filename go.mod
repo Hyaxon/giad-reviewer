@@ -1,4 +1,4 @@
-module github.com/hyaxon/agentic-review
+module github.com/hyaxon/giad
 
 go 1.27.1
 

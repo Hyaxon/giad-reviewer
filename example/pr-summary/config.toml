@@ -1,0 +1,2 @@
+[agents.pr-summary]
+capabilities = ["repository.instructions"]

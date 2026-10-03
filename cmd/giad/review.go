@@ -6,22 +6,25 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hyaxon/agentic-review/internal/agents"
-	"github.com/hyaxon/agentic-review/internal/config"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
-	"github.com/hyaxon/agentic-review/internal/review"
+	"github.com/hyaxon/giad/internal/agents"
+	"github.com/hyaxon/giad/internal/config"
+	"github.com/hyaxon/giad/internal/githubauth"
+	"github.com/hyaxon/giad/internal/review"
 	"github.com/spf13/cobra"
 )
 
 func newReviewCommand() *cobra.Command {
 	var repository, manifestPath, configPath string
 	var timeout time.Duration
-	var asJSON bool
+	var asJSON, preview bool
 	cmd := &cobra.Command{
 		Use:   "review <PR-URL|number>",
 		Short: "Launch a trusted external agent and preview its local draft",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if !preview {
+				return fmt.Errorf("--preview=false is unsupported; publication is not implemented")
+			}
 			if timeout <= 0 {
 				return fmt.Errorf("timeout must be positive")
 			}
@@ -74,6 +77,7 @@ func newReviewCommand() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", "", "Explicit trusted runtime settings (TOML)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Minute, "Overall review timeout")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Print the revision-bound draft as JSON")
+	cmd.Flags().BoolVar(&preview, "preview", true, "Show a local draft (all reviews are local-only in this version)")
 	_ = cmd.MarkFlagRequired("agent-manifest")
 	_ = cmd.MarkFlagRequired("config")
 	return cmd

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyaxon/agentic-review/internal/githubapi"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
-	"github.com/hyaxon/agentic-review/internal/repo"
-	"github.com/hyaxon/agentic-review/internal/tools"
+	"github.com/hyaxon/giad/internal/githubapi"
+	"github.com/hyaxon/giad/internal/githubauth"
+	"github.com/hyaxon/giad/internal/repo"
+	"github.com/hyaxon/giad/internal/tools"
 	"github.com/spf13/cobra"
 )
 

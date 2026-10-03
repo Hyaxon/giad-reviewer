@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hyaxon/agentic-review/internal/model"
-	"github.com/hyaxon/agentic-review/internal/tools"
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/internal/model"
+	"github.com/hyaxon/giad/internal/tools"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 const MaxRequests = 64
@@ -41,7 +41,7 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 		return report, errors.New("agent session requires repository tools")
 	}
 	if s.Manifest.APIVersion != protocol.Version {
-		return report, errors.New("unsupported agent apiVersion")
+		return report, fmt.Errorf("unsupported agent apiVersion %q; expected %q", s.Manifest.APIVersion, protocol.Version)
 	}
 	for _, name := range s.Manifest.ModelProfiles {
 		p, ok := s.Profiles[name]
@@ -51,7 +51,7 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 	}
 	broker := broker{session: s, read: map[string]map[int]bool{}}
 	defer func() { err = errors.Join(err, broker.unload(ctx)) }()
-	workdir, err := os.MkdirTemp("", "agentic-review-agent-")
+	workdir, err := os.MkdirTemp("", "giad-agent-")
 	if err != nil {
 		return report, err
 	}
@@ -134,7 +134,7 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 			}
 			if callErr == nil {
 				if broker.incomplete || s.Job.IssuesError != "" {
-					report.Limitations += "\nAgentic Review: repository tools or linked-issue coverage were incomplete."
+					report.Limitations += "\nGIAD: repository tools or linked-issue coverage were incomplete."
 				}
 				if err := encoder.Encode(protocol.Frame{APIVersion: protocol.Version, ID: frame.ID, Result: json.RawMessage(`{"accepted":true}`)}); err != nil {
 					return protocol.Report{}, err

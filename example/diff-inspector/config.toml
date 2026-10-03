@@ -1,0 +1,3 @@
+# No model endpoint or credentials are needed by this tutorial agent.
+[agents.diff-inspector]
+capabilities = ["git.diff", "repository.instructions"]

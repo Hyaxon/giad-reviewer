@@ -19,9 +19,9 @@ func TestExpandHomePath(t *testing.T) {
 		want string
 	}{
 		{"home", "~", homeDir},
-		{"home key", "~/.config/agentic-review/keys/agentic-review.pem", filepath.Join(homeDir, ".config", "agentic-review", "keys", "agentic-review.pem")},
-		{"absolute", "/example/agentic-review.pem", "/example/agentic-review.pem"},
-		{"relative", "keys/agentic-review.pem", "keys/agentic-review.pem"},
+		{"home key", "~/.config/giad/keys/giad.pem", filepath.Join(homeDir, ".config", "giad", "keys", "giad.pem")},
+		{"absolute", "/example/giad.pem", "/example/giad.pem"},
+		{"relative", "keys/giad.pem", "keys/giad.pem"},
 		{"spaces", "keys/my key.pem", "keys/my key.pem"},
 		{"literal variable", "$HOME/key.pem", "$HOME/key.pem"},
 	} {
@@ -47,7 +47,7 @@ func TestLoadIdentityHomePath(t *testing.T) {
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
-private_key = "~/.config/agentic-review/keys/agentic-review.pem"
+private_key = "~/.config/giad/keys/giad.pem"
 `
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ private_key = "~/.config/agentic-review/keys/agentic-review.pem"
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(homeDir, ".config", "agentic-review", "keys", "agentic-review.pem")
+	want := filepath.Join(homeDir, ".config", "giad", "keys", "giad.pem")
 	if got := identity.GitHub.App.PrivateKey; got != want {
 		t.Errorf("private key path = %q, want %q", got, want)
 	}

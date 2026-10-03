@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hyaxon/agentic-review/internal/model/ollama"
+	"github.com/hyaxon/giad/internal/model/ollama"
 	"github.com/pelletier/go-toml/v2"
 )
 

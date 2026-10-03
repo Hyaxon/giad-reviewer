@@ -1,10 +1,10 @@
-// Package protocol defines the language-independent agentic-review/v1 wire contract.
+// Package protocol defines the language-independent giad/v1 wire contract.
 // Agents own their prompts and reasoning. The runtime owns these transport types.
 package protocol
 
 import "encoding/json"
 
-const Version = "agentic-review/v1"
+const Version = "giad/v1"
 const MaxMessageBytes = 1024 * 1024
 
 // Frames are newline-delimited JSON, with one outstanding request at a time.

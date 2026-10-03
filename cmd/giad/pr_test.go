@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyaxon/agentic-review/internal/githubapi"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubapi"
+	"github.com/hyaxon/giad/internal/githubauth"
 )
 
 func TestParsePRTarget(t *testing.T) {

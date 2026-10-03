@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyaxon/agentic-review/internal/agents"
-	"github.com/hyaxon/agentic-review/internal/config"
-	"github.com/hyaxon/agentic-review/internal/githubapi"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
-	"github.com/hyaxon/agentic-review/internal/instructions"
-	"github.com/hyaxon/agentic-review/internal/model/ollama"
-	"github.com/hyaxon/agentic-review/internal/repo"
-	"github.com/hyaxon/agentic-review/internal/tools"
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/internal/agents"
+	"github.com/hyaxon/giad/internal/config"
+	"github.com/hyaxon/giad/internal/githubapi"
+	"github.com/hyaxon/giad/internal/githubauth"
+	"github.com/hyaxon/giad/internal/instructions"
+	"github.com/hyaxon/giad/internal/model/ollama"
+	"github.com/hyaxon/giad/internal/repo"
+	"github.com/hyaxon/giad/internal/tools"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 type Request struct {

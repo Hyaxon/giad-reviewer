@@ -1,53 +1,53 @@
 # Runtime design
 
-Agentic Review owns execution and access. Separate agents own review judgment.
-A composite agent such as MAGI is one installed package; its internal reviewer
-names and prompts never belong in this runtime.
-
-A review follows this sequence:
+GIAD owns execution and access. Separate agents own review judgment. A composite
+agent such as MAGI is one installed package, with its own reviewer names and prompts.
 
 ```text
-GitHub PR → verified checkout + base instructions → agent process
-                                                    ↕
+GitHub PR -> verified checkout + base instructions -> agent process
+                                                     |
                                             repository/model broker
-                                                    ↓
-                                              draft preview
+                                                     |
+                                               local draft
 ```
-
-## Code layout
 
 | Location | Responsibility |
 | --- | --- |
-| `cmd/agentic-review` | CLI and output |
+| `cmd/giad` | CLI and output |
 | `internal/review`, `internal/agents` | Orchestration, process launch, capability checks, draft validation |
-| `internal/github*`, `internal/repo`, `internal/instructions` | Authentication, PR context, disposable checkouts, base-revision AGENTS.md |
-| `internal/tools`, `internal/model` | Bounded repository access and Ollama profiles/lifecycle |
-| `pkg/protocol` | Shared agent wire contract |
+| `internal/github*`, `internal/repo`, `internal/instructions` | Auth, PR context, disposable checkouts, base-revision AGENTS.md |
+| `internal/tools`, `internal/model` | Bounded repository access and optional model profiles/lifecycle |
+| `pkg/protocol` | Public `giad/v1` wire types |
+| `example/diff-inspector` | Independent, model-free protocol example |
 
-The runtime verifies exact base/head commits and removes temporary resources after
-use. Agents receive normalized PR/issue data and scoped `AGENTS.md` guidance from
-the **base revision only**. Head edits and other repository text remain evidence.
+The runtime verifies exact base/head commits and cleans up disposable resources.
+Scoped AGENTS.md guidance comes from the base revision; head edits and other
+repository/issue text remain evidence. Agents request only declared/granted
+capabilities. GitHub credentials stay in the host; model endpoints/tags come from
+host configuration. Models unload before profile switches and at session cleanup.
 
-Agents request only declared and granted capabilities. GitHub credentials stay in
-the host; model endpoints/tags come from host configuration. Models remain loaded
-between calls, unload before profile switches, and unload on session cleanup.
+Reviews are serial and local-only. `--preview` is explicit but optional; disabling
+it is rejected. Structural finding validation is not proof of correctness or valid
+GitHub inline coordinates. Failed sessions do not become clean reviews.
 
-The broker offers no shell, tests, writes, web, browser, or publication operation.
-Agent binaries still run as the local user: process separation is not OS isolation.
-Draft checks validate structure and inspected line anchors, not whether a finding
-is true. An aborted session fails rather than reporting a clean review.
+## Next milestones
 
-## Next steps
+The GIAD naming migration and real diff-inspector integration are in place. Next:
 
-1. Validate the contract with an independently installed agent.
-2. Harden agent isolation and process cleanup.
-3. Add human-confirmed, revision-bound COMMENT publication, then App auth/setup
-   and sandboxed test execution. Workers can wait.
+1. Enforce isolation for every agent and terminate its full process tree. Current
+   agents run as the local user and must be trusted; no OS sandbox exists yet.
+2. Run an optional specialist through the same public contract.
+3. Add separately confirmed COMMENT-only publication with revision/diff validation
+   and retry-safe outcomes.
 
-## Migration
+Test execution will use a separate sandbox through approved `tests.run` profiles;
+agent-requested runs are primary, baseline runs optional. Tests/builds/install hooks
+must never fall back to host execution. App tokens/setup and richer issue selection
+follow as needed; model-resource leases must precede parallel jobs. Workers can wait.
 
-The module and CLI are now `agentic-review`; the folder/remote rename is still pending.
-The former role/model flags were replaced by manifests and config. Original MAGI
-source is saved in [migration/magi](../migration/magi/README.md), with historical
-docs in a single ZIP alongside it. This design follows the local
-`Agentic_Review_MAGI_Architecture_and_Setup.pdf`.
+## Compatibility
+
+The module/CLI/config names are GIAD; the wire prefix is `giad/v1`. Old
+`agentic-review/v1` manifests/frames are rejected with no silent alias. Retain
+`github.linked_issues` as the capability name. The local folder and GitHub remote
+still use the historical repository name until an administrative rename occurs.

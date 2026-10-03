@@ -1,30 +1,36 @@
 # Configure an agent
 
-The runtime needs two local files: an agent manifest describing what to launch,
-and a TOML config granting capabilities and mapping model profiles.
+Use explicit trusted files outside the PR checkout: a manifest describing the
+executable and declarations, and TOML granting capabilities/mapping model profiles.
 
-1. Copy [the example manifest](../examples/agent.manifest.json). Set its `name`,
-   absolute executable path, arguments, required capabilities, and model profile names.
-2. Copy [the example config](../agentic-review.example.toml). Match the agent name
-   and profile names from the manifest; set your downloaded Ollama model tags.
-3. Pass both files explicitly with `review --agent-manifest PATH --config PATH`.
+For the runnable model-free example:
 
-There is no automatic config lookup or bundled reviewer. Use files and executables
-you trust, outside the PR checkout.
+```sh
+make example
+./bin/giad review 42 --repo OWNER/REPO \
+  --agent-manifest bin/diff-inspector.agent.json \
+  --config example/diff-inspector/config.toml
+```
+
+The generated manifest contains the built executable's absolute path. Rebuild it
+if you move the checkout. No model endpoint or credentials belong in the agent.
+
+For a custom agent, copy [the manifest template](../example/agent.manifest.json)
+and [giad.example.toml](../giad.example.toml). Match the agent name/profile names;
+set the absolute executable/script paths and any downloaded model tags.
 
 | Config entry | Meaning |
 | --- | --- |
-| `[models.NAME]` | Logical profile requested by the agent |
+| `[models.NAME]` | Logical profile declared by the agent; omit for model-free agents |
 | `provider` | Currently `"ollama"` |
-| `endpoint` | Ollama HTTP(S) origin; use the local example unless you intend to send code elsewhere |
+| `endpoint` | HTTP(S) origin; remote origins send your source conversations there |
 | `model` | Downloaded model tag |
-| `[agents.NAME].capabilities` | Capabilities this agent may request |
+| `[agents.NAME].capabilities` | Agent's permitted broker methods |
 
 Required capabilities must be declared, granted, and implemented; otherwise launch
-fails. Optional capabilities stay off unless all three conditions hold. Supported
-operations are listed in [the protocol](agent-protocol.md).
+fails. Optional capabilities remain off unless all three conditions hold. See
+[the protocol](agent-protocol.md). There is no automatic config lookup or agent registry.
 
-Authentication currently uses your GitHub CLI account. App key/JWT helpers exist,
-but App authentication is not connected to the CLI. The separate
-[identity example](../identity.example.toml) uses `[github.app]`; legacy
-`[github.magi]` files remain supported by the helper. Do not combine both sections.
+Auth currently uses GitHub CLI. App helpers exist but token exchange is not wired.
+The separate [identity example](../identity.example.toml) uses `[github.app]`; legacy
+`[github.magi]` remains accepted by the helper. Do not combine both sections.

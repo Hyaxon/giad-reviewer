@@ -1,5 +1,5 @@
 {
-  "apiVersion": "agentic-review/v1",
+  "apiVersion": "giad/v1",
   "name": "reviewer",
   "version": "0.1.0",
   "entrypoint": {

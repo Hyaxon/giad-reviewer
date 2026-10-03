@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/spf13/cobra"
 )
 
@@ -11,7 +11,7 @@ func newAuthCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "auth", Short: "Check personal GitHub authentication"}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
-		Short: "Verify the GitHub account Agentic Review will use",
+		Short: "Verify the GitHub account GIAD will use",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			login, err := githubauth.VerifyUser(cmd.Context(), githubauth.UserAuth{})

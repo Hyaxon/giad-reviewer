@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyaxon/agentic-review/internal/githubauth"
+	"github.com/hyaxon/giad/internal/githubauth"
 )
 
 type testAuth struct{}

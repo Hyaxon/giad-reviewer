@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/hyaxon/agentic-review/internal/model"
-	"github.com/hyaxon/agentic-review/internal/tools"
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/internal/model"
+	"github.com/hyaxon/giad/internal/tools"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 // The test executable doubles as a language-independent protocol peer.
@@ -52,6 +53,9 @@ func TestAgentProcess(t *testing.T) {
 		return reply
 	}
 	switch mode {
+	case "old-version":
+		_ = encoder.Encode(protocol.Frame{APIVersion: "agentic-review/v1", ID: "legacy", Method: "git.diff", Params: json.RawMessage(`{}`)})
+		os.Exit(0)
 	case "malformed":
 		fmt.Println("this is not JSON")
 		os.Exit(0)
@@ -126,7 +130,7 @@ func fixtureSession(t *testing.T, mode string) Session {
 }
 func TestExternalAgentSession(t *testing.T) {
 	t.Setenv("GH_TOKEN", "not-for-agent")
-	for _, mode := range []string{"success", "denied", "bad-anchor", "malformed", "premature", "hang", "models"} {
+	for _, mode := range []string{"success", "denied", "bad-anchor", "malformed", "premature", "hang", "models", "old-version"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixtureSession(t, mode)
 			provider := &fakeProvider{}
@@ -198,5 +202,57 @@ func TestFailedUnloadPreventsProfileSwitch(t *testing.T) {
 	}
 	if b.active != "one" || len(second.events) != 0 {
 		t.Fatal("failed unload lost lifecycle ownership")
+	}
+}
+
+// Build and launch an independent example that imports only the public wire types.
+func TestDiffInspectorIntegration(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "diff-inspector")
+	buildCtx, cancelBuild := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelBuild()
+	build := exec.CommandContext(buildCtx, "go", "build", "-o", binary, "../../example/diff-inspector")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build example: %v\n%s", err, output)
+	}
+	manifestData, err := exec.Command(binary, "--manifest").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(t.TempDir(), "agent.json")
+	if err := os.WriteFile(manifestPath, manifestData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.ModelProfiles) != 0 || m.APIVersion != "giad/v1" {
+		t.Fatalf("manifest=%+v", m)
+	}
+	grants, err := Grants(m, []string{"git.diff", "repository.instructions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, truncated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("truncated=%v", truncated), func(t *testing.T) {
+			diff := "diff --git a/example.go b/example.go\n+new line\n"
+			if truncated {
+				diff = strings.Repeat("x", tools.MaxOutputBytes+1)
+			}
+			reader, err := tools.Open(t.TempDir(), diff)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reader.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			report, err := (Session{Manifest: m, Repository: reader, Job: protocol.Job{AllowedCapabilities: grants, ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}}}).Run(ctx)
+			if err != nil || report.Findings == nil || len(report.Findings) != 0 || !strings.Contains(report.Summary, "1 changed files") {
+				t.Fatalf("report=%+v err=%v", report, err)
+			}
+			if truncated && !strings.Contains(report.Limitations, "truncated") {
+				t.Fatal("truncation missing from draft")
+			}
+		})
 	}
 }

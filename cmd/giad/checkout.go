@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyaxon/agentic-review/internal/githubapi"
-	"github.com/hyaxon/agentic-review/internal/githubauth"
-	"github.com/hyaxon/agentic-review/internal/repo"
+	"github.com/hyaxon/giad/internal/githubapi"
+	"github.com/hyaxon/giad/internal/githubauth"
+	"github.com/hyaxon/giad/internal/repo"
 	"github.com/spf13/cobra"
 )
 
@@ -44,7 +44,7 @@ func newCheckoutCommand() *cobra.Command {
 				return err
 			}
 			if keep {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Kept for manual inspection: %s\nRemove its agentic-review-* parent directory when finished. This directory is not an execution sandbox.\n", checkout.Path)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Kept for manual inspection: %s\nRemove its giad-* parent directory when finished. This directory is not an execution sandbox.\n", checkout.Path)
 			} else {
 				if err = checkout.Close(); err != nil {
 					return err

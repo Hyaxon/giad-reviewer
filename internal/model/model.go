@@ -2,7 +2,7 @@ package model
 
 import (
 	"context"
-	"github.com/hyaxon/agentic-review/pkg/protocol"
+	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 // Wire types are public so independent Go agents can use the same JSON contract.
