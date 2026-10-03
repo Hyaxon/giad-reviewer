@@ -29,7 +29,13 @@ type Outcome struct {
 // An exclusive durable local attempt file prevents blind resends after crashes
 // or ambiguous HTTP failures. Reconciliation is read-only and author-specific.
 func Publish(ctx context.Context, api API, plan Plan, confirmation, stateDir string) (Outcome, error) {
-	if confirmation == "" || confirmation != plan.Key {
+	candidates := []Plan{plan}
+	legacyConfirmed := false
+	for previous := plan.legacy; previous != nil; previous = previous.legacy {
+		candidates = append(candidates, *previous)
+		legacyConfirmed = legacyConfirmed || confirmation == previous.Key
+	}
+	if confirmation == "" || (confirmation != plan.Key && !legacyConfirmed) {
 		return Outcome{}, errors.New("confirmation does not match this publication; preview the draft again")
 	}
 	state, err := githubapi.ReviewState(plan.Event)
@@ -44,13 +50,26 @@ func Publish(ctx context.Context, api API, plan Plan, confirmation, stateDir str
 	if err != nil {
 		return Outcome{}, err
 	}
-	for _, existing := range reviews {
-		completed := existing.State == state || (plan.Event == "REQUEST_CHANGES" && existing.State == "DISMISSED")
-		if existing.User.ID == author && completed && existing.CommitID == plan.HeadSHA && existing.Body == plan.Body {
-			if err := verifyComments(ctx, api, plan, existing.ID); err != nil {
-				return Outcome{}, err
+	for _, candidate := range candidates {
+		for _, existing := range reviews {
+			completed := existing.State == state || (plan.Event == "REQUEST_CHANGES" && existing.State == "DISMISSED")
+			if existing.User.ID == author && completed && existing.CommitID == candidate.HeadSHA && existing.Body == candidate.Body {
+				if err := verifyComments(ctx, api, candidate, existing.ID); err != nil {
+					return Outcome{}, err
+				}
+				return Outcome{Review: existing, Existing: true}, nil
 			}
-			return Outcome{Review: existing, Existing: true}, nil
+		}
+	}
+	if legacyConfirmed {
+		return Outcome{}, errors.New("publication formatting changed; preview again and confirm the new hash before posting")
+	}
+	for _, previous := range candidates[1:] {
+		oldAttempt := filepath.Join(stateDir, fmt.Sprintf("%d-%s.json", author, previous.Key))
+		if _, err := os.Stat(oldAttempt); err == nil {
+			return Outcome{}, errors.New("a previous publication attempt has no matching GitHub review; outcome unknown, refusing another POST. Check GitHub manually and retain the attempt record")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return Outcome{}, err
 		}
 	}
 	latest, err := api.GetPullRequest(ctx, plan.Repository, plan.Number)

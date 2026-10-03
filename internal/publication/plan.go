@@ -28,6 +28,7 @@ type Plan struct {
 	BaseSHA, HeadSHA, Body, Key string
 	Event                       string
 	Comments                    []githubapi.InlineComment
+	legacy                      *Plan
 }
 
 type Options struct {
@@ -93,6 +94,29 @@ func Prepare(draft review.Result, current githubapi.PRContext) (Plan, error) {
 // PrepareWithOptions validates every inline anchor against fresh head-side diff
 // hunks. The human chooses the event and placement, independently of the agent.
 func PrepareWithOptions(draft review.Result, current githubapi.PRContext, options Options) (Plan, error) {
+	plan, err := prepareWithRenderer(draft, current, options, text, false)
+	if err != nil {
+		return Plan{}, err
+	}
+	// Keep the exact old formatting for read-only retry reconciliation.
+	legacy, err := prepareWithRenderer(draft, current, options, legacyText, true)
+	if err != nil {
+		return Plan{}, err
+	}
+	if legacy.Key != plan.Key {
+		plan.legacy = &legacy
+	}
+	previous, err := prepareWithRenderer(draft, current, options, text, true)
+	if err != nil {
+		return Plan{}, err
+	}
+	if previous.Key != plan.Key && previous.Key != legacy.Key {
+		legacy.legacy = &previous
+	}
+	return plan, nil
+}
+
+func prepareWithRenderer(draft review.Result, current githubapi.PRContext, options Options, text func(string) string, showRevisions bool) (Plan, error) {
 	options, err := options.Normalize()
 	if err != nil {
 		return Plan{}, err
@@ -124,7 +148,11 @@ func PrepareWithOptions(draft review.Result, current githubapi.PRContext, option
 	}
 	var body strings.Builder
 	var comments []githubapi.InlineComment
-	fmt.Fprintf(&body, "## GIAD review — %s\n\nBase: `%s`\nHead: `%s`\n\n%s\n", text(draft.Agent), job.BaseSHA, job.HeadSHA, text(draft.Report.Summary))
+	fmt.Fprintf(&body, "## GIAD review — %s\n\n", text(draft.Agent))
+	if showRevisions {
+		fmt.Fprintf(&body, "Base: `%s`\nHead: `%s`\n\n", job.BaseSHA, job.HeadSHA)
+	}
+	fmt.Fprintf(&body, "%s\n", text(draft.Report.Summary))
 	for _, f := range draft.Report.Findings {
 		anchored := false
 		for _, span := range anchors[f.File] {
@@ -203,8 +231,8 @@ func PrepareWithOptions(draft review.Result, current githubapi.PRContext, option
 	return Plan{Repository: repo, Number: job.Number, BaseSHA: job.BaseSHA, HeadSHA: job.HeadSHA, Body: body.String(), Key: key, Event: options.Event, Comments: comments}, nil
 }
 
-// Render agent text literally, suppressing HTML, Markdown links, and mentions.
-func text(value string) string {
+// legacyText is retained only to recognize previous publication attempts.
+func legacyText(value string) string {
 	value = html.EscapeString(value)
 	replacer := strings.NewReplacer("\\", "\\\\", "`", "\\`", "*", "\\*", "_", "\\_", "[", "\\[", "]", "\\]", "#", "\\#", "!", "\\!", "@", "&#64;")
 	return replacer.Replace(value)

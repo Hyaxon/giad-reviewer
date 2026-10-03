@@ -12,7 +12,11 @@ type Repository struct {
 }
 
 // Provider returns a token for trusted GitHub API code, never for model tools.
-// An App provider can later select an installation and refresh tokens here.
 type Provider interface {
 	Token(context.Context, Repository) (string, error)
+}
+
+// AuthorProvider identifies publishers whose tokens do not support GET /user.
+type AuthorProvider interface {
+	ReviewAuthor(context.Context, Repository) (int64, error)
 }

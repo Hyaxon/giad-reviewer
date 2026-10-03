@@ -1,42 +1,37 @@
-# Configure an agent
+# Configuration
 
-Use explicit trusted files outside the PR checkout: a manifest describing the
-executable and declarations, and TOML granting capabilities/mapping model profiles.
+Choose trusted files explicitly, outside the PR checkout:
 
-For the runnable model-free example:
-
-```sh
-make example
-make images
-./bin/giad review 42 --repo OWNER/REPO \
-  --agent-manifest bin/diff-inspector.agent.json \
-  --config example/diff-inspector/config.toml
-```
-
-Manifest executable/script paths refer to files inside the installed Linux image.
-No model endpoint or credentials belong in the agent. Reviews never build or pull
-images and fail if Docker or the configured image is unavailable.
+- `--agent-manifest`: installed executable, declared capabilities, model profiles.
+- `--config`: granted capabilities, Docker images, models, and test profiles.
+- `--identity`: optional GitHub App IDs and private-key path.
 
 For a custom agent, copy [the manifest template](../example/agent.manifest.json)
-and [giad.example.toml](../giad.example.toml). Match the agent name/profile names;
-set the image's absolute executable/script paths and any downloaded model tags.
+and [giad.example.toml](../giad.example.toml). Agent/profile names must match.
+Entrypoint paths refer to files inside the installed Linux image. Reviews do not
+build or pull images; interpreters and dependencies must already be packaged.
 
-| Config entry | Meaning |
+## Runtime policy
+
+| Entry | Meaning |
 | --- | --- |
-| `[models.NAME]` | Logical profile declared by the agent; omit for model-free agents |
+| `[models.NAME]` | Host-mapped logical profile; omit for model-free agents |
 | `provider` | Currently `"ollama"` |
-| `endpoint` | HTTP(S) origin; remote origins send your source conversations there |
-| `model` | Downloaded model tag |
-| `[agents.NAME].capabilities` | Agent's permitted broker methods |
-| `[agents.NAME].sandbox_image` | Required locally installed Linux agent image; tags resolve to an immutable ID per launch |
-| `[agents.NAME].test_profiles` | Approved profile names for this agent; also requires declared/granted `tests.run` |
-| `[tests.NAME]` | Fixed test `image`, absolute `command`, `args`, and `timeout_seconds` (1–600) |
+| `endpoint` | HTTP(S) origin; remote origins receive source conversations |
+| `model` | Exact installed model tag from `ollama list` |
+| `[agents.NAME].capabilities` | Permitted broker methods |
+| `[agents.NAME].sandbox_image` | Locally installed Linux agent image |
+| `[agents.NAME].test_profiles` | Approved test names; requires declared/granted `tests.run` |
+| `[tests.NAME]` | Fixed image, absolute command, args, timeout (1–600 seconds) |
 
 Required capabilities must be declared, granted, and implemented; otherwise launch
-fails. Optional capabilities remain off unless all three conditions hold. See
-[the protocol](agent-protocol.md). There is no automatic config lookup or agent registry.
+fails. Optional capabilities remain off unless all three hold. Unknown fields fail
+validation. There is no automatic config lookup or agent registry.
 
-To enable Go tests for the code-review example after `make images`:
+## Optional tests
+
+After `make images`, enable Go tests by updating the agent block in your local
+config and adding the test profile below. Keep your existing model settings.
 
 ```toml
 [agents.code-review]
@@ -51,13 +46,41 @@ args = ["test", "-p", "1", "./..."]
 timeout_seconds = 120
 ```
 
-Keep your existing `[models.review]` settings. Tests run only on request; there is
-no automatic baseline. Images must contain `/giad-test`, a trusted helper that
-extracts the sanitized stdin tar into `/workspace` and executes the configured
-command. The Go example caches this repository's modules at image build time.
-For other projects, prepare their dependencies in a trusted image beforehand;
-reviews have no network or dependency installation step.
+Profiles can run other languages with the appropriate image and fixed command.
+Every image needs a trusted `/giad-test` helper to extract the sanitized stdin tar
+into `/workspace` and execute that command. The Go example caches this repository's
+modules at image build time; prepare another project's dependencies in its own
+trusted image. Reviews have no network or dependency installation step.
 
-Auth currently uses GitHub CLI. App helpers exist but token exchange is not wired.
-The separate [identity example](../identity.example.toml) uses `[github.app]`; legacy
-`[github.magi]` remains accepted by the helper. Do not combine both sections.
+Tests are agent-requested and head-only. GIAD retains exit status, bounded merged
+output, duration, timeout, truncation, and memory-limit status. A passing command
+does not establish that tests existed or that the code is correct.
+
+## Authentication
+
+Personal mode is the default:
+
+```sh
+gh auth login --hostname github.com
+./bin/giad auth status
+```
+
+For App mode, copy [identity.example.toml](../identity.example.toml). On the App's
+GitHub settings page, copy the App ID and Client ID, generate a private key, and
+install the App on the repositories you want to review. The installation Configure
+page's URL ends in the installation ID.
+
+Use `[github.app]` and a local PEM file path. Grant Contents read, Issues read,
+and Pull requests read/write; Metadata read is automatic. This manual workflow
+needs no client secret or webhook. Keep the private key outside the repository.
+
+```sh
+./bin/giad auth status --identity identity.toml
+./bin/giad pr view 42 --repo OWNER/REPO --identity identity.toml
+```
+
+Pass the same identity flag to `review` and both publication preview/confirmation
+commands. Status verifies App identity, installation grants, token exchange, and
+bot identity. Repository access is checked separately. Tokens stay in host memory,
+are repository-scoped, and refresh before expiry. Invalid App auth fails without
+personal fallback. Legacy `[github.magi]` is accepted separately for existing files.

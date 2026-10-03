@@ -3,6 +3,7 @@ package githubapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,33 @@ import (
 
 	"github.com/hyaxon/giad/internal/githubauth"
 )
+
+type appAuthorAuth struct {
+	fakeAuth
+	err error
+}
+
+func (a appAuthorAuth) ReviewAuthor(context.Context, githubauth.Repository) (int64, error) {
+	return 999, a.err
+}
+
+func TestReviewAuthorUsesAppIdentityWithoutPersonalFallback(t *testing.T) {
+	for _, denied := range []bool{false, true} {
+		auth := appAuthorAuth{}
+		if denied {
+			auth.err = errors.New("App identity unavailable")
+		}
+		client := NewClient(auth)
+		client.http.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
+			t.Error("App identity fell back to GET /user")
+			return nil, errors.New("unexpected personal lookup")
+		})
+		id, err := client.ReviewAuthor(context.Background(), githubauth.Repository{Owner: "owner", Name: "repo"})
+		if (err != nil) != denied || (!denied && id != 999) {
+			t.Fatalf("incorrect App author: id=%d err=%v", id, err)
+		}
+	}
+}
 
 func TestCreateReviewOnlyCommentsOnPinnedCommit(t *testing.T) {
 	client := NewClient(fakeAuth{})
@@ -27,7 +55,7 @@ func TestCreateReviewOnlyCommentsOnPinnedCommit(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":42,"html_url":"https://github.com/owner/repo/pull/2#pullrequestreview-42","state":"COMMENTED","commit_id":"head","body":"previewed body"}`)), Header: make(http.Header)}, nil
 	})
-	if _, err := client.CreateCommentReview(context.Background(), githubauth.Repository{Owner: "owner", Name: "repo"}, 2, "head", "previewed body"); err != nil {
+	if _, err := client.CreateReview(context.Background(), githubauth.Repository{Owner: "owner", Name: "repo"}, 2, ReviewSubmission{CommitID: "head", Body: "previewed body", Event: "COMMENT"}); err != nil {
 		t.Fatal(err)
 	}
 }

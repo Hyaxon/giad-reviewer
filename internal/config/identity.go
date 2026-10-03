@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ func LoadIdentity(path string) (IdentityConfig, error) {
 
 	var identity IdentityConfig
 
-	if err := toml.Unmarshal(data, &identity); err != nil {
+	if err := toml.NewDecoder(bytes.NewReader(data)).DisallowUnknownFields().Decode(&identity); err != nil {
 		return IdentityConfig{}, fmt.Errorf("parse identity file: %w", err)
 	}
 

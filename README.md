@@ -1,79 +1,96 @@
 # GIAD
 
 A self-hosted runtime for programmable pull-request review agents. GIAD handles
-GitHub access, PR checkouts, repository tools, optional local models, and draft
-previews. Agents supply review judgment; MAGI will be an optional separate package.
+GitHub access, checkouts, sandboxed execution, repository tools, optional models,
+and confirmed publication. Agents supply the review judgment.
 
-**Prototype:** PR inspection and external-agent previews work. A model-free
-`diff-inspector` example is included. Reviews and optional approved test profiles
-run in separate Docker containers. Saved drafts can be published as confirmed
-GitHub reviews, including request-changes reviews and inline findings.
+The manual workflow works today: inspect a PR, run one installed agent, save a
+draft, and publish a review. V1 release validation on another repository and a
+fresh setup is still pending.
 
 ## Get started
 
-Install Go (version in `go.mod`), Git, GitHub CLI, and a running Linux Docker engine:
+Install Go (version in `go.mod`), Git, and a running Linux Docker engine.
+Personal authentication also needs GitHub CLI; model-backed agents need Ollama.
+
+Run from the repository root:
 
 ```sh
-make                       # Build GIAD and the example agent/manifest.
-make images                # Package the examples as local agent images.
-make sandbox-smoke         # Verify isolation and run an isolated example.
+make
+make images
 gh auth login --hostname github.com
 ./bin/giad auth status
-./bin/giad pr view 42 --repo OWNER/REPO --diff
-```
-
-Run the example on a PR (no Ollama required):
-
-```sh
 ./bin/giad review 42 --repo OWNER/REPO \
   --agent-manifest bin/diff-inspector.agent.json \
-  --config example/diff-inspector/config.toml --preview
+  --config example/diff-inspector/config.toml
 ```
 
-The example retrieves the diff and returns no findings; it performs no defect
-analysis. Review results are local. Add `--json` for structured output. Full GitHub PR
-URLs also work; use `--help` for command options.
+This model-free example retrieves the diff and returns no findings. It demonstrates
+the protocol, not defect analysis. Full GitHub PR URLs also work.
 
-To publish, first save and preview the draft:
+For a small model-backed reviewer, follow [the examples](example/README.md).
+For your own GitHub App, pass `--identity identity.toml` to `auth status`, `pr`,
+`review`, and `publish`; see [authentication](docs/configuration.md#authentication).
+
+## Save and publish
+
+Add `--json > draft.json` to the review command to save its result. Inspect the
+publication preview, then repeat with the printed confirmation hash:
 
 ```sh
-./bin/giad review 42 --repo OWNER/REPO \
-  --agent-manifest bin/diff-inspector.agent.json \
-  --config example/diff-inspector/config.toml --json > draft.json
-./bin/giad publish draft.json
-# Inspect the displayed body, then rerun with its --confirm HASH.
+./bin/giad publish draft.json --inline
+./bin/giad publish draft.json --inline --confirm HASH
 ```
 
-For request-changes reviews with findings attached to their source lines:
+The default event is `COMMENT`. Add `--event REQUEST_CHANGES` to both commands to
+request changes. With App auth, include `--identity identity.toml` in both.
+Personal accounts cannot request changes on their own PRs.
+
+GIAD checks current revisions and inline anchors before posting. Confirmation
+covers the action, body, and comments. Retries recognize completed reviews;
+uncertain attempts require reconciliation. Comments preserve code formatting.
+Base/head hashes stay in the draft and validation, outside the visible review body.
+Nothing publishes during `review`; agents have no publication capability.
+
+## Planned features and checks
+
+Before V1:
+
+- [ ] Validate another repository with executable code and passing/failing tests.
+- [ ] Verify setup from a clean checkout, including examples and Docker isolation.
+- [ ] Verify App publication and retry reconciliation end to end.
+- [ ] Freeze the public protocol and prepare a versioned release.
+
+Future features, with scope and order still open:
+
+- **Optional centralized service:** user sign-in and GitHub App installation for
+  people who prefer hosted reviews. It would manage execution, credentials, and
+  review history; repository access, isolation between users, source retention,
+  and publication controls need a design before implementation.
+- **Automation:** webhook-triggered reviews, queued jobs, and workers.
+- **Official agent catalog:** an officially maintained list of agents with setup
+  instructions, protocol compatibility, and clear maintainer/support information.
+- **Agent management:** easier package installation and selection from the catalog.
+- **CLI distribution:** versioned binaries and installation on `PATH`, so users
+  run `giad <command>` without a repository checkout or `./bin/giad` path.
+- **Broader reviews:** base/head test comparisons, explicit issue selection, and
+  deleted-line/multiline comments.
+- **Parallel execution:** concurrent reviews with shared model/resource limits.
+- **Review evaluation:** repeatable fixtures for real defects, false positives,
+  and coverage gaps in example agents.
+
+## Reference and development
+
+- [Examples](example/README.md): runnable agents and optional Go tests.
+- [Configuration](docs/configuration.md): trusted policy, models, tests, authentication.
+- [Agent protocol](docs/agent-protocol.md): the public `giad/v1` contract.
+- [Architecture](docs/architecture.md): boundaries and supported scope.
+- [Contributing](CONTRIBUTING.md): development workflow and PR expectations.
+- [AGENTS.md](AGENTS.md): instructions for coding agents working in this repository.
 
 ```sh
-./bin/giad publish draft.json --event REQUEST_CHANGES --inline
-# Inspect the summary and inline comments, then use the new printed hash:
-./bin/giad publish draft.json --event REQUEST_CHANGES --inline --confirm HASH
-```
-
-The default remains a body-only `COMMENT` review. `--inline` also works with
-`COMMENT`. Publication rechecks PR revisions and head-side diff anchors; the
-confirmation covers the action and every inline comment. Retries reconcile the
-review and its comments without blindly resending uncertain attempts. GitHub
-rejections include their validation reason. Agents have no publication capability.
-
-## Build your own agent
-
-Start with the [tiny Python example](example/README.md).
-The same page includes a small model-backed reviewer that returns anchored findings.
-Follow [configuration](docs/configuration.md) and [the protocol](docs/agent-protocol.md).
-Use [giad.example.toml](giad.example.toml) for model-backed agents; model-free agents
-need no model configuration. Start Ollama only when your selected agent uses it.
-
-## Development
-
-```sh
-gofmt -w cmd internal pkg example
 make check                 # Module checks, vet, and race tests.
-make smoke                 # Offline protocol check using a trusted test process.
-make lint                  # Pinned Markdown linter.
+make smoke                 # Offline agent/broker integration.
+make sandbox-smoke         # Real Docker isolation; build images first.
+make lint                  # Markdown checks.
 ```
-
-[Architecture](docs/architecture.md) explains the boundaries and next milestones.
-The revised `GIAD_Architecture_and_Setup.pdf` is the design reference.

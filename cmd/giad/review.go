@@ -8,7 +8,6 @@ import (
 
 	"github.com/hyaxon/giad/internal/agents"
 	"github.com/hyaxon/giad/internal/config"
-	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/hyaxon/giad/internal/review"
 	"github.com/spf13/cobra"
 )
@@ -42,7 +41,11 @@ func newReviewCommand() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			defer cancel()
-			runner := review.Runner{Auth: githubauth.UserAuth{}, Progress: func(message string) { fmt.Fprintln(cmd.ErrOrStderr(), message) }}
+			auth, err := commandAuth(cmd)
+			if err != nil {
+				return err
+			}
+			runner := review.Runner{Auth: auth, Progress: func(message string) { fmt.Fprintln(cmd.ErrOrStderr(), message) }}
 			result, err := runner.Run(ctx, review.Request{Repository: target, Number: number, Manifest: manifest, Config: settings})
 			if err != nil {
 				return fmt.Errorf("%s review incomplete: %w", manifest.Name, err)
@@ -72,6 +75,7 @@ func newReviewCommand() *cobra.Command {
 			return err
 		},
 	}
+	addIdentityFlag(cmd)
 	cmd.Flags().StringVar(&repository, "repo", "", "GitHub repository in OWNER/REPO form")
 	cmd.Flags().StringVar(&manifestPath, "agent-manifest", "", "Explicit trusted local agent manifest (JSON)")
 	cmd.Flags().StringVar(&configPath, "config", "", "Explicit trusted runtime settings (TOML)")

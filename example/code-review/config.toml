@@ -1,7 +1,7 @@
 # Replace with a model already downloaded in your Ollama installation.
 [models.review]
 endpoint = "http://127.0.0.1:11434"
-model = "devstral-small-2:latest"
+model = "qwen3.8:27b-mlx"
 provider = "ollama"
 
 [agents.code-review]

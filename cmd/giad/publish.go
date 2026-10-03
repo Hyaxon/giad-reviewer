@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyaxon/giad/internal/githubapi"
-	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/hyaxon/giad/internal/publication"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +31,11 @@ func newPublishCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client := githubapi.NewClient(githubauth.UserAuth{})
+			auth, err := commandAuth(cmd)
+			if err != nil {
+				return err
+			}
+			client := githubapi.NewClient(auth)
 			ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 			defer cancel()
 			current, err := client.GetPRContext(ctx, repo, draft.Job.Number)
@@ -52,7 +55,7 @@ func newPublishCommand() *cobra.Command {
 				}
 			}
 			if confirmation == "" {
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Nothing published. Rerun with the same --event/--inline options and --confirm %s\n", plan.Key)
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Nothing published. Rerun with the same --identity/--event/--inline options and --confirm %s\n", plan.Key)
 				return err
 			}
 			cache, err := os.UserCacheDir()
@@ -71,6 +74,7 @@ func newPublishCommand() *cobra.Command {
 			return err
 		},
 	}
+	addIdentityFlag(cmd)
 	cmd.Flags().StringVar(&confirmation, "confirm", "", "Confirmation hash printed by a prior publication preview")
 	cmd.Flags().StringVar(&event, "event", "COMMENT", "GitHub review event: COMMENT or REQUEST_CHANGES")
 	cmd.Flags().BoolVar(&inline, "inline", false, "Attach each finding as a head-side inline comment")

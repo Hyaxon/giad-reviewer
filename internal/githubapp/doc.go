@@ -1,2 +1,2 @@
-// Package githubapp will handle GitHub App authentication and pull-request APIs.
+// Package githubapp authenticates a user-owned GitHub App installation.
 package githubapp
