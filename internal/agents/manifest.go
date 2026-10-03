@@ -27,7 +27,7 @@ func decode(data []byte, target any) error {
 }
 
 // LoadManifest never searches the PR checkout for configuration or executables.
-// Absolute commands avoid PATH-based replacement by repository content.
+// Commands are absolute paths inside the trusted installed agent image.
 func LoadManifest(path string) (protocol.Manifest, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -84,7 +84,7 @@ func Grants(m protocol.Manifest, policy []string) ([]string, error) {
 }
 func supported(name string) bool {
 	switch name {
-	case "repository.read", "repository.search", "git.diff", "repository.instructions", "github.linked_issues", "model.chat":
+	case "repository.read", "repository.search", "git.diff", "repository.instructions", "github.linked_issues", "model.chat", "tests.run":
 		return true
 	}
 	return false

@@ -25,9 +25,10 @@ func manifest(command string) protocol.Manifest {
 
 func main() {
 	showManifest := flag.Bool("manifest", false, "Print a manifest using this executable's absolute path")
+	container := flag.Bool("container", false, "Use the installed image's executable path in the manifest")
 	stdio := flag.Bool("stdio", false, "Run the GIAD agent protocol over stdin/stdout")
 	flag.Parse()
-	if flag.NArg() != 0 || *showManifest == *stdio {
+	if flag.NArg() != 0 || *showManifest == *stdio || (*container && !*showManifest) {
 		fmt.Fprintln(os.Stderr, "use exactly one of --manifest or --stdio")
 		os.Exit(2)
 	}
@@ -35,6 +36,9 @@ func main() {
 	if *showManifest {
 		var command string
 		command, err = os.Executable()
+		if *container {
+			command = "/agent/diff-inspector"
+		}
 		if err == nil {
 			encoder := json.NewEncoder(os.Stdout)
 			encoder.SetIndent("", "  ")

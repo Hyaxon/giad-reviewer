@@ -1,0 +1,17 @@
+# Replace with a model already downloaded in your Ollama installation.
+[models.review]
+endpoint = "http://127.0.0.1:11434"
+model = "devstral-small-2:latest"
+provider = "ollama"
+
+[agents.code-review]
+capabilities = ["git.diff", "repository.read", "repository.instructions", "model.chat"]
+sandbox_image = "giad-code-review:example"
+
+# To enable the optional test call, add "tests.run" to capabilities above and
+# test_profiles = ["go"] under [agents.code-review]. Build with make images first.
+[tests.go]
+image = "giad-go-tests:example"
+command = "/usr/local/go/bin/go"
+args = ["test", "-p", "1", "./..."]
+timeout_seconds = 120

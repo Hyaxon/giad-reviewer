@@ -12,6 +12,7 @@ import (
 	"github.com/hyaxon/giad/internal/instructions"
 	"github.com/hyaxon/giad/internal/model/ollama"
 	"github.com/hyaxon/giad/internal/repo"
+	"github.com/hyaxon/giad/internal/sandbox"
 	"github.com/hyaxon/giad/internal/tools"
 	"github.com/hyaxon/giad/pkg/protocol"
 )
@@ -23,9 +24,11 @@ type Request struct {
 	Config     config.Runtime
 }
 type Result struct {
-	Agent  string          `json:"agent"`
-	Job    protocol.Job    `json:"job"`
-	Report protocol.Report `json:"report"`
+	APIVersion string                `json:"apiVersion"`
+	Agent      string                `json:"agent"`
+	Job        protocol.Job          `json:"job"`
+	Report     protocol.Report       `json:"report"`
+	TestRuns   []protocol.TestResult `json:"testRuns"`
 }
 type Runner struct {
 	Auth     githubauth.Provider
@@ -38,9 +41,23 @@ func (r Runner) Run(ctx context.Context, request Request) (_ Result, err error) 
 	if !ok {
 		return Result{}, fmt.Errorf("agent %q has no trusted runtime policy", request.Manifest.Name)
 	}
+	if err := sandbox.ValidateImage(policy.SandboxImage); err != nil {
+		return Result{}, fmt.Errorf("agent %q: %w", request.Manifest.Name, err)
+	}
 	grants, err := agents.Grants(request.Manifest, policy.Capabilities)
 	if err != nil {
 		return Result{}, err
+	}
+	testProfiles := map[string]sandbox.TestProfile{}
+	for _, name := range policy.TestProfiles {
+		profile, ok := request.Config.Tests[name]
+		if !ok {
+			return Result{}, fmt.Errorf("test profile %q is not configured", name)
+		}
+		if err := profile.Validate(); err != nil {
+			return Result{}, fmt.Errorf("test profile %q: %w", name, err)
+		}
+		testProfiles[name] = profile
 	}
 	profiles := map[string]agents.Profile{}
 	for _, name := range request.Manifest.ModelProfiles {
@@ -76,6 +93,11 @@ func (r Runner) Run(ctx context.Context, request Request) (_ Result, err error) 
 		BaseSHA: checkout.BaseSHA, HeadSHA: checkout.HeadSHA, IssuesError: input.IssuesError,
 		AllowedCapabilities: grants, ModelProfiles: request.Manifest.ModelProfiles,
 		ChangedFiles: []protocol.ChangedFile{}, LinkedIssues: []protocol.Issue{}}
+	for _, grant := range grants {
+		if grant == "tests.run" {
+			job.TestProfiles = append([]string{}, policy.TestProfiles...)
+		}
+	}
 	for _, f := range input.Files {
 		job.ChangedFiles = append(job.ChangedFiles, protocol.ChangedFile{Path: f.Filename, PreviousPath: f.PreviousFilename, Status: f.Status})
 	}
@@ -96,9 +118,10 @@ func (r Runner) Run(ctx context.Context, request Request) (_ Result, err error) 
 			return Result{}, errors.New("repository has AGENTS.md; repository.instructions must be declared and granted")
 		}
 	}
-	report, err := (agents.Session{Manifest: request.Manifest, Job: job, Repository: reader, Profiles: profiles, Progress: r.Progress}).Run(ctx)
+	tests := &sandbox.TestRunner{Checkout: checkout.Path, Profiles: testProfiles, Results: []protocol.TestResult{}}
+	report, err := (agents.Session{Launcher: sandbox.DockerLauncher{Image: policy.SandboxImage}, Manifest: request.Manifest, Job: job, Repository: reader, Profiles: profiles, Tests: tests, Progress: r.Progress}).Run(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Agent: request.Manifest.Name, Job: job, Report: report}, nil
+	return Result{APIVersion: protocol.Version, Agent: request.Manifest.Name, Job: job, Report: report, TestRuns: tests.Results}, nil
 }

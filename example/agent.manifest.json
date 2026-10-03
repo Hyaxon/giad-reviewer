@@ -3,7 +3,7 @@
   "name": "reviewer",
   "version": "0.1.0",
   "entrypoint": {
-    "command": "/absolute/path/to/your/reviewer",
+    "command": "/agent/reviewer",
     "args": ["agent", "--stdio"]
   },
   "capabilities": {

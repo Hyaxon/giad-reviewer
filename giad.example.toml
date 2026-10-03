@@ -7,6 +7,7 @@ model = "qwen3.6:27b"
 
 # Agent names match manifests. This runtime does not contain the reviewer package.
 [agents.reviewer]
+sandbox_image = "your-installed-reviewer:local"
 capabilities = [
   "repository.read",
   "repository.search",
@@ -16,4 +17,12 @@ capabilities = [
   "model.chat",
 ]
 
-# tests.run, workspace.write, web.search and browser are currently unavailable.
+# To enable tests, also declare/grant "tests.run" and add
+# test_profiles = ["go"] under [agents.reviewer]. Run make images first.
+[tests.go]
+image = "giad-go-tests:example"
+command = "/usr/local/go/bin/go"
+args = ["test", "-p", "1", "./..."]
+timeout_seconds = 120
+
+# workspace.write, web.search and browser are currently unavailable.

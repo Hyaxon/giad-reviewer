@@ -1,0 +1,3 @@
+FROM python:3.13-slim
+COPY agent.py /agent/agent.py
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

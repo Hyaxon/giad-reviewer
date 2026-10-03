@@ -1,4 +1,4 @@
-// Package sandbox is reserved for isolated agent launching and separate execution
-// of repository tests/builds. Both backends are unimplemented; current agents must
-// be explicitly trusted local executables.
+// Package sandbox defines the agent execution boundary. CLI reviews use Docker
+// isolation; TrustedHostLauncher is retained only for offline protocol tests.
+// TestRunner executes approved test profiles in separate disposable containers.
 package sandbox

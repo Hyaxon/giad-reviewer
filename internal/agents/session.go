@@ -7,19 +7,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hyaxon/giad/internal/model"
+	"github.com/hyaxon/giad/internal/sandbox"
 	"github.com/hyaxon/giad/internal/tools"
 	"github.com/hyaxon/giad/pkg/protocol"
 )
 
 const MaxRequests = 64
 const MaxModelCalls = 16
+const MaxTestRuns = 2
+
+type TestExecutor interface {
+	Run(context.Context, string) (protocol.TestResult, error)
+}
 
 type Profile struct {
 	Provider model.Provider
@@ -27,16 +31,21 @@ type Profile struct {
 }
 
 type Session struct {
+	Launcher   sandbox.Launcher
 	Manifest   protocol.Manifest
 	Job        protocol.Job
 	Repository *tools.Repository
 	Profiles   map[string]Profile
 	Progress   func(string)
+	Tests      TestExecutor
 }
 
-// Run starts a trusted installed executable, with a clean environment and private cwd.
-// This is process separation, not an OS sandbox for hostile agent binaries.
+// Run owns the review protocol and broker. The explicitly selected launcher owns
+// execution; the session never falls back to host execution on a launch failure.
 func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
+	if s.Launcher == nil {
+		return report, errors.New("agent session requires an explicitly selected launcher")
+	}
 	if s.Repository == nil {
 		return report, errors.New("agent session requires repository tools")
 	}
@@ -51,38 +60,19 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 	}
 	broker := broker{session: s, read: map[string]map[int]bool{}}
 	defer func() { err = errors.Join(err, broker.unload(ctx)) }()
-	workdir, err := os.MkdirTemp("", "giad-agent-")
+	process, err := s.Launcher.Launch(ctx, sandbox.Command{Path: s.Manifest.Entrypoint.Command, Args: s.Manifest.Entrypoint.Args})
 	if err != nil {
 		return report, err
 	}
-	defer func() { err = errors.Join(err, os.RemoveAll(workdir)) }()
-	childCtx, stop := context.WithCancel(ctx)
-	defer stop()
-	cmd := exec.CommandContext(childCtx, s.Manifest.Entrypoint.Command, s.Manifest.Entrypoint.Args...)
-	cmd.Dir = workdir
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}
-	if root := os.Getenv("SYSTEMROOT"); root != "" {
-		cmd.Env = append(cmd.Env, "SYSTEMROOT="+root)
-	}
-	cmd.Stderr = io.Discard
-	cmd.WaitDelay = 2 * time.Second
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return report, err
-	}
-	defer stdin.Close()
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return report, err
-	}
-	if err := cmd.Start(); err != nil {
-		return report, fmt.Errorf("start agent: %w", err)
-	}
-	closeOnCancel := context.AfterFunc(childCtx, func() { _ = stdin.Close(); _ = stdout.Close() })
-	defer closeOnCancel()
-	// Terminate after accepted completion or failure; always reap the child.
-	defer func() { stop(); _ = stdin.Close(); _ = stdout.Close(); _ = cmd.Wait() }()
-	encoder := frameWriter{stdin}
+	defer func() {
+		err = errors.Join(err, process.Close())
+		if diagnostics, ok := process.(sandbox.Diagnostics); err != nil && ok {
+			if text := diagnostics.Diagnostics(); text != "" {
+				err = fmt.Errorf("%w\nAgent diagnostics: %s", err, text)
+			}
+		}
+	}()
+	encoder := frameWriter{process.Stdin()}
 	job := s.Job
 	if !s.allowed("github.linked_issues") {
 		job.LinkedIssues = nil
@@ -92,6 +82,9 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 		job.TrustedInstructions = nil
 	}
 	job.ModelProfiles = s.Manifest.ModelProfiles
+	if !s.allowed("tests.run") {
+		job.TestProfiles = nil
+	}
 	data, err := json.Marshal(job)
 	if err != nil {
 		return report, err
@@ -102,7 +95,7 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 	if err := encoder.Encode(protocol.Frame{APIVersion: protocol.Version, Method: "review.start", Params: data}); err != nil {
 		return report, err
 	}
-	scanner := bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(process.Stdout())
 	scanner.Buffer(make([]byte, 4096), protocol.MaxMessageBytes)
 	totalBytes := 0
 	seen := map[string]bool{}
@@ -133,6 +126,24 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 				callErr = broker.validate(report)
 			}
 			if callErr == nil {
+				if len(broker.tests) == 0 {
+					report.Limitations += "\nGIAD: no test profile was run."
+				}
+				for _, test := range broker.tests {
+					status := "passed"
+					if test.TimedOut {
+						status = "timed out"
+					} else if test.ExitCode == nil || *test.ExitCode != 0 {
+						status = "failed"
+					}
+					report.Limitations += fmt.Sprintf("\nGIAD: test profile %s %s (head only; no base comparison).", test.Profile, status)
+					if test.Truncated {
+						report.Limitations += " Test output was truncated."
+					}
+					if test.OOMKilled {
+						report.Limitations += " Container exceeded its memory limit."
+					}
+				}
 				if broker.incomplete || s.Job.IssuesError != "" {
 					report.Limitations += "\nGIAD: repository tools or linked-issue coverage were incomplete."
 				}
@@ -145,6 +156,9 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 			callErr = fmt.Errorf("capability %q denied", frame.Method)
 		} else {
 			result, callErr = broker.call(ctx, frame.Method, frame.Params)
+		}
+		if err := ctx.Err(); err != nil {
+			return protocol.Report{}, err
 		}
 		reply := protocol.Frame{APIVersion: protocol.Version, ID: frame.ID}
 		if callErr != nil {
@@ -183,6 +197,8 @@ type broker struct {
 	incomplete bool
 	modelCalls int
 	active     string
+	testCalls  int
+	tests      []protocol.TestResult
 }
 
 func (b *broker) unload(ctx context.Context) error {
@@ -201,6 +217,27 @@ func (b *broker) unload(ctx context.Context) error {
 func (b *broker) call(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	s := b.session
 	switch method {
+	case "tests.run":
+		var args protocol.TestRequest
+		if err := decode(params, &args); err != nil {
+			return nil, err
+		}
+		approved := false
+		for _, name := range s.Job.TestProfiles {
+			approved = approved || name == args.Profile
+		}
+		if !approved || s.Tests == nil {
+			return nil, errors.New("test profile is not approved for this agent")
+		}
+		b.testCalls++
+		if b.testCalls > MaxTestRuns {
+			return nil, errors.New("test-run budget exhausted")
+		}
+		result, err := s.Tests.Run(ctx, args.Profile)
+		if err == nil {
+			b.tests = append(b.tests, result)
+		}
+		return result, err
 	case "git.diff", "repository.instructions", "github.linked_issues":
 		if err := decode(params, &struct{}{}); err != nil {
 			return nil, err

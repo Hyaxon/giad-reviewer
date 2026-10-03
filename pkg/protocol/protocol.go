@@ -49,6 +49,7 @@ type Job struct {
 	TrustedInstructions []Instruction `json:"trustedInstructions"`
 	AllowedCapabilities []string      `json:"allowedCapabilities"`
 	ModelProfiles       []string      `json:"modelProfiles"`
+	TestProfiles        []string      `json:"testProfiles"`
 }
 type ChangedFile struct {
 	Path         string `json:"path"`

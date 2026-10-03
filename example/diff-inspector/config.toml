@@ -1,3 +1,4 @@
 # No model endpoint or credentials are needed by this tutorial agent.
 [agents.diff-inspector]
+sandbox_image = "giad-diff-inspector:example"
 capabilities = ["git.diff", "repository.instructions"]

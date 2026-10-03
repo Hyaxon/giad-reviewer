@@ -13,7 +13,7 @@ func TestReviewRejectsDisablingPreview(t *testing.T) {
 	cmd.SilenceErrors = true
 	cmd.SilenceUsage = true
 	cmd.SetArgs([]string{"42", "--repo", "owner/repo", "--agent-manifest", "unused", "--config", "unused", "--preview=false"})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "publication is not implemented") {
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "use giad publish separately") {
 		t.Fatalf("expected explicit local-only error before reading configuration, got %v", err)
 	}
 }

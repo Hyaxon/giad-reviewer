@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/hyaxon/giad/internal/githubauth"
@@ -15,6 +16,20 @@ import (
 type Client struct {
 	auth githubauth.Provider
 	http *http.Client
+}
+
+// HTTPError represents an explicit GitHub response, rather than an ambiguous
+// connection failure. Preserve bounded validation details for publication errors.
+type HTTPError struct {
+	Status  int
+	Message string
+}
+
+func (e *HTTPError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("GitHub returned HTTP %d: %s", e.Status, e.Message)
+	}
+	return fmt.Sprintf("GitHub returned HTTP %d", e.Status)
 }
 
 func NewClient(auth githubauth.Provider) *Client {
@@ -81,9 +96,34 @@ func (c *Client) request(ctx context.Context, repo githubauth.Repository, method
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("GitHub returned HTTP 404: resource does not exist or this account cannot access it; check repository and PR number")
+			return nil, &HTTPError{Status: resp.StatusCode, Message: "resource does not exist or this account cannot access it; check repository and PR number"}
 		}
-		return nil, fmt.Errorf("GitHub returned HTTP %d", resp.StatusCode)
+		var details struct {
+			Message string            `json:"message"`
+			Errors  []json.RawMessage `json:"errors"`
+		}
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_ = json.Unmarshal(data, &details)
+		message := details.Message
+		for _, raw := range details.Errors[:min(len(details.Errors), 3)] {
+			var value string
+			if json.Unmarshal(raw, &value) != nil {
+				var entry struct{ Message, Field, Code string }
+				if json.Unmarshal(raw, &entry) == nil {
+					value = entry.Message
+					if value == "" {
+						value = strings.TrimSpace(entry.Field + " " + entry.Code)
+					}
+				}
+			}
+			if value != "" {
+				message += "; " + value
+			}
+		}
+		if len(message) > 2000 {
+			message = message[:2000]
+		}
+		return nil, &HTTPError{Status: resp.StatusCode, Message: message}
 	}
 	const maxResponse = 16 << 20
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))

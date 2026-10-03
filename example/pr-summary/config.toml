@@ -1,2 +1,3 @@
 [agents.pr-summary]
+sandbox_image = "giad-pr-summary:example"
 capabilities = ["repository.instructions"]

@@ -19,11 +19,11 @@ func newReviewCommand() *cobra.Command {
 	var asJSON, preview bool
 	cmd := &cobra.Command{
 		Use:   "review <PR-URL|number>",
-		Short: "Launch a trusted external agent and preview its local draft",
+		Short: "Launch an isolated agent and preview its local draft",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !preview {
-				return fmt.Errorf("--preview=false is unsupported; publication is not implemented")
+				return fmt.Errorf("--preview=false is unsupported; save a draft with --json and use giad publish separately")
 			}
 			if timeout <= 0 {
 				return fmt.Errorf("timeout must be positive")

@@ -76,3 +76,9 @@ jobs:
         run: |
           ./bin/giad --help
           ./bin/giad --version
+
+      - name: Build isolated example images
+        run: make images
+
+      - name: Verify real agent isolation and cleanup
+        run: make sandbox-smoke

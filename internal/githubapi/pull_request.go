@@ -1,6 +1,7 @@
 package githubapi
 
 type PullRequest struct {
+	State        string `json:"state"`
 	ChangedFiles int    `json:"changed_files"`
 	Number       int    `json:"number"`
 	Title        string `json:"title"`

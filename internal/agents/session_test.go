@@ -2,9 +2,12 @@ package agents
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hyaxon/giad/internal/model"
+	"github.com/hyaxon/giad/internal/sandbox"
 	"github.com/hyaxon/giad/internal/tools"
 	"github.com/hyaxon/giad/pkg/protocol"
 )
@@ -125,7 +129,7 @@ func fixtureSession(t *testing.T, mode string) Session {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Session{Manifest: protocol.Manifest{APIVersion: protocol.Version, Name: "fixture", Version: "1", Entrypoint: protocol.Entrypoint{Command: executable, Args: []string{"-test.run=^TestAgentProcess$", "--", "--agent-fixture", mode}}},
+	return Session{Launcher: sandbox.TrustedHostLauncher{}, Manifest: protocol.Manifest{APIVersion: protocol.Version, Name: "fixture", Version: "1", Entrypoint: protocol.Entrypoint{Command: executable, Args: []string{"-test.run=^TestAgentProcess$", "--", "--agent-fixture", mode}}},
 		Job: protocol.Job{ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}, AllowedCapabilities: []string{"repository.read", "model.chat"}}, Repository: reader}
 }
 func TestExternalAgentSession(t *testing.T) {
@@ -161,13 +165,89 @@ func TestExternalAgentSession(t *testing.T) {
 		})
 	}
 }
+
+type launchFunc func(context.Context, sandbox.Command) (sandbox.Process, error)
+
+type blockingProvider struct{ entered bool }
+
+func (p *blockingProvider) Chat(ctx context.Context, _ string, _ []model.Message, _ []model.Tool) (model.Message, error) {
+	p.entered = true
+	<-ctx.Done()
+	return model.Message{}, ctx.Err()
+}
+func (*blockingProvider) Unload(context.Context, string) error { return nil }
+
+func TestModelTimeoutPreservesDeadline(t *testing.T) {
+	s := fixtureSession(t, "models")
+	provider := &blockingProvider{}
+	s.Manifest.ModelProfiles = []string{"review"}
+	s.Profiles = map[string]Profile{"review": {Provider: provider, Model: "fixture"}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := s.Run(ctx)
+	if !provider.entered || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("timed-out model call must report its deadline, entered=%v err=%v", provider.entered, err)
+	}
+}
+
+func (f launchFunc) Launch(ctx context.Context, command sandbox.Command) (sandbox.Process, error) {
+	return f(ctx, command)
+}
+
+func TestSessionRequiresLauncher(t *testing.T) {
+	s := fixtureSession(t, "success")
+	s.Launcher = nil
+	if _, err := s.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "explicitly selected launcher") {
+		t.Fatalf("missing launcher must fail before execution, got %v", err)
+	}
+}
+
+func TestLaunchFailureDoesNotFallBack(t *testing.T) {
+	s := fixtureSession(t, "success")
+	launchErr := errors.New("isolation unavailable")
+	s.Launcher = launchFunc(func(context.Context, sandbox.Command) (sandbox.Process, error) {
+		return nil, launchErr
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := s.Run(ctx); !errors.Is(err, launchErr) {
+		t.Fatalf("launcher failure must remain a failure, got %v", err)
+	}
+}
+
+type cleanupFailureProcess struct {
+	input  bytes.Buffer
+	output io.Reader
+	err    error
+	closed bool
+}
+
+func (p *cleanupFailureProcess) Stdin() io.Writer  { return &p.input }
+func (p *cleanupFailureProcess) Stdout() io.Reader { return p.output }
+func (p *cleanupFailureProcess) Close() error {
+	p.closed = true
+	return p.err
+}
+
+func TestLauncherCleanupFailureFailsSession(t *testing.T) {
+	s := fixtureSession(t, "success")
+	cleanupErr := errors.New("could not release agent resources")
+	p := &cleanupFailureProcess{err: cleanupErr, output: strings.NewReader(`{"apiVersion":"giad/v1","id":"finish","method":"review.finish","params":{"summary":"Draft","limitations":"","findings":[]}}` + "\n")}
+	s.Launcher = launchFunc(func(context.Context, sandbox.Command) (sandbox.Process, error) {
+		return p, nil
+	})
+	if report, err := s.Run(context.Background()); report.Summary != "Draft" || !errors.Is(err, cleanupErr) || !p.closed {
+		t.Fatalf("accepted report must not hide failed cleanup: report=%+v err=%v closed=%v", report, err, p.closed)
+	}
+}
+
 func TestRequiredAndOptionalCapabilities(t *testing.T) {
-	m := protocol.Manifest{Capabilities: protocol.Capabilities{Required: []string{"repository.read"}, Optional: []string{"tests.run", "repository.search"}}}
+	m := protocol.Manifest{Capabilities: protocol.Capabilities{Required: []string{"repository.read"}, Optional: []string{"unsupported.tool", "tests.run", "repository.search"}}}
 	if _, err := Grants(m, nil); err == nil {
 		t.Fatal("missing required grant must refuse launch")
 	}
 	grants, err := Grants(m, []string{"repository.read", "repository.search", "tests.run"})
-	if err != nil || strings.Join(grants, ",") != "repository.read,repository.search" {
+	if err != nil || strings.Join(grants, ",") != "repository.read,tests.run,repository.search" {
 		t.Fatalf("grants=%v err=%v", grants, err)
 	}
 }
@@ -246,7 +326,7 @@ func TestDiffInspectorIntegration(t *testing.T) {
 			defer reader.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			report, err := (Session{Manifest: m, Repository: reader, Job: protocol.Job{AllowedCapabilities: grants, ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}}}).Run(ctx)
+			report, err := (Session{Launcher: sandbox.TrustedHostLauncher{}, Manifest: m, Repository: reader, Job: protocol.Job{AllowedCapabilities: grants, ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}}}).Run(ctx)
 			if err != nil || report.Findings == nil || len(report.Findings) != 0 || !strings.Contains(report.Summary, "1 changed files") {
 				t.Fatalf("report=%+v err=%v", report, err)
 			}
@@ -254,5 +334,66 @@ func TestDiffInspectorIntegration(t *testing.T) {
 				t.Fatal("truncation missing from draft")
 			}
 		})
+	}
+}
+
+func TestDockerExampleIntegration(t *testing.T) {
+	image := os.Getenv("GIAD_TEST_DOCKER_IMAGE")
+	if image == "" {
+		t.Skip("set GIAD_TEST_DOCKER_IMAGE to run the real isolated Python example")
+	}
+	m, err := LoadManifest("../../example/pr-summary/agent.manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants, err := Grants(m, []string{"repository.instructions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := tools.Open(t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	report, err := (Session{
+		Launcher: sandbox.DockerLauncher{Image: image}, Manifest: m, Repository: reader,
+		Job: protocol.Job{Number: 42, Title: "Example PR", AllowedCapabilities: grants, ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}},
+	}).Run(ctx)
+	if err != nil || report.Summary != "PR #42: Example PR (1 changed files)." || report.Findings == nil || len(report.Findings) != 0 {
+		t.Fatalf("isolated review: report=%+v err=%v", report, err)
+	}
+}
+
+func TestDockerDiffInspectorIntegration(t *testing.T) {
+	image := os.Getenv("GIAD_TEST_DIFF_IMAGE")
+	if image == "" {
+		t.Skip("set GIAD_TEST_DIFF_IMAGE to exercise the isolated diff broker")
+	}
+	m := protocol.Manifest{
+		APIVersion: protocol.Version, Name: "diff-inspector", Version: "0.1.0",
+		Entrypoint:   protocol.Entrypoint{Command: "/agent/diff-inspector", Args: []string{"--stdio"}},
+		Capabilities: protocol.Capabilities{Required: []string{"git.diff", "repository.instructions"}},
+	}
+	grants, err := Grants(m, []string{"git.diff", "repository.instructions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	diff := "diff --git a/example.go b/example.go\n+new line\n"
+	reader, err := tools.Open(t.TempDir(), diff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	report, err := (Session{
+		Launcher: sandbox.DockerLauncher{Image: image}, Manifest: m, Repository: reader,
+		Job: protocol.Job{AllowedCapabilities: grants, ChangedFiles: []protocol.ChangedFile{{Path: "example.go", Status: "modified"}}},
+	}).Run(ctx)
+	expected := fmt.Sprintf("Retrieved %d bytes of diff for 1 changed files.", len(diff))
+	if err != nil || report.Summary != expected || report.Findings == nil || len(report.Findings) != 0 {
+		t.Fatalf("isolated diff broker: report=%+v err=%v", report, err)
 	}
 }

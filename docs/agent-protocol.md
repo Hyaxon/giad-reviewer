@@ -6,18 +6,22 @@ and [model.go](../pkg/protocol/model.go); use those as the schema reference.
 ## Launch and framing
 
 Use [the manifest example](../example/agent.manifest.json) with
-`apiVersion: "giad/v1"`, a name/version, an absolute executable path,
+`apiVersion: "giad/v1"`, a name/version, an absolute executable path inside its image,
 capability declarations, and logical model profiles. The runtime passes arguments
-directly and launches in an empty directory with a minimal environment. This is
-currently a trusted process, not an OS sandbox.
+directly and launches in a Docker container with writable scratch space at `/tmp`.
+The image filesystem is read-only; the container has no network or host mounts.
+Include all interpreters/dependencies in the trusted installed image. Images with
+`VOLUME` declarations are rejected. The image is selected in host configuration.
 
 Communication uses newline-delimited UTF-8 JSON over stdin/stdout, one request
 outstanding at a time. This is a custom framed protocol, not JSON-RPC. Reserve
-stdout for frames; the current runtime discards agent stderr.
+stdout for frames; the runtime captures at most 8 KiB of agent stderr and includes
+it in failed-session diagnostics after cleanup.
 
 The host starts with a `review.start` frame whose `params` is a `Job`: repository,
 PR metadata, base/head SHAs, changed files, linked issues, scoped trusted instructions,
-granted capabilities, and model profile names. `issuesError` marks unavailable issue
+granted capabilities, model profile names, and approved `testProfiles` names.
+`issuesError` marks unavailable issue
 context. Instructions/issues are included only when granted; existing AGENTS.md
 requires the instruction capability.
 
@@ -48,6 +52,7 @@ The host replies with the same ID and either `result` or an `error` string:
 | `repository.instructions` | `{}` | Scoped base-revision guidance |
 | `github.linked_issues` | `{}` | Issue array or retrieval error |
 | `model.chat` | `profile`, `messages`, `tools` | Assistant message and proposed tool calls |
+| `tests.run` | `profile` only | `profile`, nullable `exitCode`, `output`, `durationMs`, `timedOut`, `truncated`, `oomKilled` |
 | `review.finish` | `Report` | `{"accepted":true}` |
 
 Capability calls must be declared and granted. `review.finish` is always available.
@@ -58,6 +63,21 @@ Agents own prompts and conversations. `model.chat` accepts only declared host-ma
 profiles; proposed model tool calls return as data. Request host capabilities separately
 to execute them. The runtime retains/unloads models; no endpoint or lifecycle command
 is needed in the agent.
+
+`tests.run` selects a fixed host-approved profile and starts a fresh container.
+The head checkout is copied as bounded regular files/directories, excluding `.git`;
+symlinks/special files fail explicitly. No host directories or sockets are mounted.
+Snapshots are capped at 10,000 entries/64 MiB, with at most 16 MiB per file.
+Tests can write their disposable copy and scratch space. Failed tests, timeouts,
+and memory exhaustion are evidence; setup/transport/cleanup failures are tool errors.
+Output is untrusted, merged stdout/stderr, capped at 64 KiB and always drained.
+Timeouts have `exitCode: null`. GIAD retains observed results in `--json` output's
+`testRuns` and adds test coverage to the report independently of agent claims.
+Runs are head-only: failure does not establish an introduced regression. Base
+comparisons and test selectors are not implemented. At most two runs per session;
+each profile allows 1–600 seconds. Test containers get one CPU, 1 GiB memory,
+128 processes, 768 MiB `/workspace`, and 256 MiB executable `/tmp`, with the same
+non-root, network-free isolation as agents. Images/dependencies must be preinstalled.
 
 ## Finish
 
@@ -80,14 +100,17 @@ is in [0,1]. Anchors must reference lines read through `repository.read` in chan
 nondeleted head files. Summary-only/deleted-file findings are not supported.
 These checks establish structure, not factual correctness or GitHub inline coordinates.
 
-After acceptance the host terminates and reaps the direct child. EOF, timeout,
-exhausted budgets, or no valid completion fails the review.
+After acceptance the host removes the agent container, terminating its processes.
+EOF, timeout, exhausted budgets, failed cleanup, or no valid completion fails the review.
 
 Limits: 1 MiB frames; 256 KiB initial job; 64 requests/4 MiB incoming data;
 16 model calls/96 KiB per model request; 64 KiB reports with at most 20 findings
 and 8 KiB text fields. Tool/provider limits also apply. The command deadline defaults
-to 30 minutes; model cleanup gets a separate 30 seconds after cancellation.
+to 30 minutes. Container creation/cleanup and model cleanup each have a separate
+30-second bound. Containers get 256 MiB memory, one CPU, 64 processes, 16 MiB `/tmp`,
+and 8 MiB private shared memory; they run as UID/GID 65532 with no Linux capabilities.
 
 Old `agentic-review/v1` frames/manifests are incompatible and explicitly rejected.
 `make smoke` launches the real [diff-inspector](../example/diff-inspector/main.go)
-through the host broker without GitHub or Ollama.
+through the broker using a trusted host test process without GitHub or Ollama.
+After `make images`, `make sandbox-smoke` exercises real container isolation.

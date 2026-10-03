@@ -18,8 +18,10 @@ func main() {
 		Long: `GIAD prepares GitHub pull requests and brokers controlled
 repository and model capabilities for separately installed review agents.
 
-Use giad review with an explicit trusted agent manifest to preview a
-local draft. GitHub publication and sandboxed test execution are not implemented.`,
+Use giad review with an explicit agent manifest and an installed Docker image to
+preview a local draft. Agents can request approved test profiles. Save a draft with
+--json and use giad publish to preview and confirm a GitHub review. Use --inline
+to attach findings to source lines and --event REQUEST_CHANGES to request changes.`,
 		Version:       version,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
@@ -31,6 +33,7 @@ local draft. GitHub publication and sandboxed test execution are not implemented
 	cmd.AddCommand(newAuthCommand())
 	cmd.AddCommand(newPRCommand())
 	cmd.AddCommand(newReviewCommand())
+	cmd.AddCommand(newPublishCommand())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if err := cmd.ExecuteContext(ctx); err != nil {

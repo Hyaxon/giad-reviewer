@@ -18,12 +18,13 @@ def receive():
 
 
 def main():
-    if sys.argv[1:] == ["--manifest"]:
+    if sys.argv[1:] in (["--manifest"], ["--manifest", "--container"]):
+        container = "--container" in sys.argv
         print(json.dumps({
             "apiVersion": VERSION, "name": "pr-summary", "version": "0.1.0",
             "entrypoint": {
-                "command": str(Path(sys.executable).resolve()),
-                "args": [str(Path(__file__).resolve())],
+                "command": "/usr/local/bin/python3" if container else str(Path(sys.executable).resolve()),
+                "args": ["/agent/agent.py" if container else str(Path(__file__).resolve())],
             },
             "capabilities": {"required": ["repository.instructions"], "optional": []},
             "modelProfiles": [],
