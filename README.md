@@ -33,7 +33,12 @@ gh auth login --hostname github.com
 This model-free example retrieves the diff and returns no findings. It demonstrates
 the protocol, not defect analysis. Full GitHub PR URLs also work.
 
-For a small model-backed reviewer, follow [the examples](example/README.md).
+For the general model-backed reviewer, follow [the examples](example/README.md).
+The optional [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents)
+now provides `pr-summary`, `diff-inspector`, `test-summary`, and `code-review`,
+with a source catalog, manifests, and setup instructions. Build its image locally
+and select a package explicitly; it uses the same protocol and permissions as
+third-party agents.
 For your own GitHub App, pass `--identity identity.toml` to `auth status`, `pr`,
 `review`, and `publish`; see [authentication](docs/configuration.md#authentication).
 
@@ -63,7 +68,8 @@ Nothing publishes during `review`; agents have no publication capability.
 ## Current limitations
 
 - **Workflow:** github.com only, one agent per command, and serial execution.
-  There is no hosted service, webhook automation, catalog, or automatic installation.
+  There is no hosted service, webhook automation, automatic catalog discovery,
+  or automatic agent installation. The official source catalog is available separately.
 - **Agents and models:** install trusted Linux images and pass configuration
   explicitly. Ollama is the only model provider. A remote model endpoint receives
   the source conversations sent to it. The examples teach the protocol; their
@@ -92,27 +98,12 @@ Ollama models, approved head-only tests, and confirmed `COMMENT` or
 wire changes require a new protocol version. Model accuracy and each project's
 agent/test-image setup need their own validation.
 
-Future features, with scope and order still open:
-
-- **Optional centralized service:** user sign-in and GitHub App installation for
-  people who prefer hosted reviews. It would manage execution, credentials, and
-  review history; repository access, isolation between users, source retention,
-  and publication controls need a design before implementation.
-- **Automation:** webhook-triggered reviews, queued jobs, and workers.
-- **Official agent catalog:** an officially maintained list of agents with setup
-  instructions, protocol compatibility, and clear maintainer/support information.
-- **Agent management:** easier package installation and selection from the catalog.
-- **CLI distribution:** versioned binaries and installation on `PATH`, so users
-  run `giad <command>` without a repository checkout or `./bin/giad` path.
-- **More agent tools:** web search, web-page retrieval, and future integrations
-  through host-brokered capabilities with explicit grants, bounded requests, and
-  controls over source data sent to providers. External content remains untrusted;
-  agent containers retain their network isolation.
-- **Broader reviews:** base/head test comparisons, explicit issue selection, and
-  deleted-line/multiline comments.
-- **Parallel execution:** concurrent reviews with shared model/resource limits.
-- **Review evaluation:** repeatable fixtures for real defects, false positives,
-  and coverage gaps in example agents.
+See the [runtime roadmap](docs/roadmap.md) for proposed local/range reviews,
+automation and queues, execution/publication controls, coding-agent integrations,
+broker tools, installation, and distributed workers. Scope, order, and command
+names remain open. The official catalog now contains its first starter collection;
+planned specialist agents belong in the
+[GIAD Agents roadmap](https://github.com/Hyaxon/giad-agents/blob/main/docs/roadmap.md).
 
 ## Reference and development
 
@@ -121,6 +112,7 @@ Future features, with scope and order still open:
 - [Configuration](docs/configuration.md): trusted policy, models, tests, authentication.
 - [Agent protocol](docs/agent-protocol.md): the public `giad/v1` contract.
 - [Architecture](docs/architecture.md): boundaries and supported scope.
+- [Runtime roadmap](docs/roadmap.md): proposed features and their implementation boundaries.
 - [Contributing](CONTRIBUTING.md): development workflow and PR expectations.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repository.
 

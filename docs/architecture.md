@@ -1,7 +1,10 @@
 # Runtime design
 
 GIAD owns execution and access. Installed agents own prompts and review judgment.
-MAGI and other specialist reviewers belong in separate agent projects.
+The optional [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents)
+already provides starter packages and a source catalog. MAGI and other planned
+specialists belong there or in third-party agent projects. Official packages use
+the same public protocol and capability grants as any other installed agent.
 
 ```text
 GitHub PR -> pinned checkout + base guidance -> sandboxed agent
@@ -63,7 +66,7 @@ tokens with in-memory caching/refresh and the bot's durable user ID for retries.
 ## Planned work
 
 See [current limitations](../README.md#current-limitations) and
-[planned features and checks](../README.md#planned-features-and-checks) for supported
+the [runtime roadmap](roadmap.md) for supported
 scope and future direction. The optional hosted service is a proposal;
 the current implementation is the manual self-hosted workflow. Generated test
 patches and approval are also outside the current scope.

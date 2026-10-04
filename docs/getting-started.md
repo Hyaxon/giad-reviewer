@@ -48,8 +48,8 @@ Skip the `gh` check if you will use App authentication.
 Once the release tag is available on GitHub, use a fresh directory:
 
 ```sh
-git clone --branch v1.0.0 https://github.com/Hyaxon/magi-agents.git
-cd magi-agents
+git clone --branch v1.0.0 git@github.com:Hyaxon/giad.git
+cd giad
 make all
 make images
 ./bin/giad --version
@@ -62,6 +62,14 @@ review a PR or publish anything. Reviews never build or pull missing images.
 
 Use `./bin/giad` from this directory, or add `"$PWD/bin"` to your shell's `PATH`.
 Keep manifests and runtime configuration outside the PR checkout being reviewed.
+
+The optional [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents)
+has its first `0.1.0` starter collection: `pr-summary`, `diff-inspector`, `test-summary`,
+and `code-review`. Follow its README to clone over SSH, build the shared image
+locally, and select an agent's manifest and example policy. Its source catalog
+does not install images automatically; check its documented compatibility baseline.
+MAGI, Test Writer, and Wacht/CVE review are proposed future packages, not part of
+this initial collection.
 
 ## Authenticate and inspect a PR
 
@@ -97,7 +105,7 @@ Check that the command succeeded before using the saved draft. A failed command
 can leave an empty redirected file. Inspect `report`, `job`, and `testRuns` in the
 JSON. Progress is written to stderr; stdout contains the draft.
 
-For defect analysis, install a compatible agent or follow the
+For defect analysis, use the official collection's `code-review` or follow the
 [model-backed example](../example/README.md#model-backed-reviewer). Set its exact
 installed model tag in your local configuration; example tags are not a guarantee
 that the model exists on your machine. Configure

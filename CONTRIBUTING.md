@@ -2,7 +2,10 @@
 
 GIAD provides the runtime and public agent protocol. Specialist reviewers belong
 in separate agent packages; examples here should stay small and teach the protocol.
-See the [roadmap](README.md#planned-features-and-checks) for planned work.
+The [official GIAD Agents repository](https://github.com/Hyaxon/giad-agents)
+maintains the starter collection, source catalog, and planned specialist reviewers.
+See the [runtime roadmap](docs/roadmap.md) for execution, tooling, integration,
+and publication work here; contribute agent strategies and their evaluations there.
 
 ## Development
 

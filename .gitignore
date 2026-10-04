@@ -10,3 +10,5 @@ identity.toml
 /giad.toml
 /draft*.json
 /private
+__pycache__/
+*.py[cod]
