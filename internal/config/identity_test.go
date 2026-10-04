@@ -24,7 +24,7 @@ func TestLoadIdentity(t *testing.T) {
 client_id = "Iv1.example"
 app_id = 123
 installation_id = 456
-private_key = "/example/magi.pem"
+private_key = "/example/github-app.pem"
 `
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -40,7 +40,7 @@ private_key = "/example/magi.pem"
 		AppID:          123,
 		ClientID:       "Iv1.example",
 		InstallationID: 456,
-		PrivateKey:     "/example/magi.pem",
+		PrivateKey:     "/example/github-app.pem",
 	}
 
 	if got := identity.GitHub.App; got != want {
@@ -80,7 +80,7 @@ func TestLoadIdentityInvalidAppId(t *testing.T) {
 client_id = "Iv1.example"
 app_id = -123
 installation_id = 456
-private_key = "/example/magi.pem"
+private_key = "/example/github-app.pem"
 `
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -106,7 +106,7 @@ func TestLoadIdentityInvalidAppIdType(t *testing.T) {
 client_id = "Iv1.example"
 app_id = "abc"
 installation_id = 456
-private_key = "/example/magi.pem"
+private_key = "/example/github-app.pem"
 `
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -131,7 +131,7 @@ func TestLoadIdentityInvalidInstallationId(t *testing.T) {
 client_id = "Iv1.example"
 app_id = 123
 installation_id = -456
-private_key = "/example/magi.pem"
+private_key = "/example/github-app.pem"
 `
 
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
@@ -195,5 +195,20 @@ private_key = "/example/key.pem"
 	}
 	if _, err := LoadIdentity(path); err == nil {
 		t.Fatal("ambiguous old and new identity blocks accepted")
+	}
+}
+
+func TestIdentityRejectsUnknownSectionsAndFields(t *testing.T) {
+	for _, content := range []string{
+		"[github.giad]\napp_id = 123\n",
+		"[github.app]\napp_id = 123\nclient_secret = 'unused'\n",
+	} {
+		path := filepath.Join(t.TempDir(), "identity.toml")
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadIdentity(path); err == nil || !strings.Contains(err.Error(), "parse identity file") {
+			t.Fatalf("unknown identity configuration was silently ignored: %v", err)
+		}
 	}
 }

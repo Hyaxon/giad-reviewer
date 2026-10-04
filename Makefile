@@ -1,9 +1,12 @@
 .PHONY: all build example images sandbox-smoke smoke check lint
 
+VERSION ?= $(shell cat VERSION)
+TEST_FLAGS ?=
+
 all: build example
 
 build:
-	go build -trimpath -o bin/giad ./cmd/giad
+	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/giad ./cmd/giad
 
 example:
 	go build -trimpath -o bin/diff-inspector ./example/diff-inspector
@@ -31,7 +34,7 @@ check:
 	go mod tidy -diff
 	go mod verify
 	go vet ./...
-	go test -race -count=1 ./...
+	go test -race -count=1 $(TEST_FLAGS) ./...
 
 lint:
 	npx --yes markdownlint-cli2@0.23.3

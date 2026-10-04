@@ -1,6 +1,4 @@
 /bin/
-/magi
-/magi.toml
 /.env
 /.env.*
 *.pem
@@ -10,4 +8,5 @@
 identity.toml
 /giad
 /giad.toml
-/migration
+/draft*.json
+/private

@@ -3,6 +3,7 @@ package publication
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,7 +50,7 @@ func TestPlanValidatesRevisionsAndAnchors(t *testing.T) {
 				current.Files[0].Filename = "auth space.go"
 				current.Diff = strings.Replace(current.Diff, "+++ b/auth.go", `+++ "b/auth space.go"`, 1)
 			}
-			plan, err := Prepare(draft, current)
+			plan, err := PrepareWithOptions(draft, current, Options{Inline: true})
 			valid := mode == "valid" || mode == "literal text" || mode == "deletion elsewhere" || mode == "quoted path"
 			if (err == nil) != valid {
 				t.Fatalf("plan=%+v err=%v", plan, err)
@@ -317,5 +318,146 @@ func TestExplicitGitHubRejectionAllowsCorrectedRetry(t *testing.T) {
 	}
 	if api.posts != 2 {
 		t.Fatal("explicitly rejected attempt was not released")
+	}
+}
+
+func TestFormattingMigrationReconcilesWithoutReposting(t *testing.T) {
+	for _, inline := range []bool{false, true} {
+		for _, mode := range []string{"completed with new hash", "completed with old hash", "uncertain old attempt", "unsubmitted old preview", "edited old comment"} {
+			t.Run(fmt.Sprintf("inline=%v/%s", inline, mode), func(t *testing.T) {
+				draft, current := fixture()
+				draft.Report.Findings[0].FailureScenario = "The `AuthorizeReset` function doesn't check the account."
+				plan, err := PrepareWithOptions(draft, current, Options{Event: "REQUEST_CHANGES", Inline: inline})
+				if err != nil {
+					t.Fatal(err)
+				}
+				old := plan.legacy
+				if old == nil {
+					t.Fatal("test requires a changed rendering identity")
+				}
+				api := &fakeAPI{current: current.PullRequest}
+				dir := t.TempDir()
+				confirm := plan.Key
+				if mode == "uncertain old attempt" {
+					path := filepath.Join(dir, "7-"+old.Key+".json")
+					if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else if mode == "unsubmitted old preview" {
+					confirm = old.Key
+				} else {
+					if _, err := Publish(context.Background(), api, *old, old.Key, dir); err != nil {
+						t.Fatal(err)
+					}
+					if mode == "completed with old hash" {
+						confirm = old.Key
+					}
+					if mode == "edited old comment" {
+						if inline {
+							api.comments[0].Body = "edited"
+						} else {
+							api.reviews[0].Body = "edited"
+						}
+					}
+				}
+				before := api.posts
+				outcome, err := Publish(context.Background(), api, plan, confirm, dir)
+				completed := strings.HasPrefix(mode, "completed")
+				if (err == nil) != completed || (completed && !outcome.Existing) || api.posts != before {
+					t.Fatalf("formatting change duplicated a review or hid an uncertain result: %+v err=%v posts=%d", outcome, err, api.posts)
+				}
+			})
+		}
+	}
+}
+
+func TestPublishedSummaryOmitsRevisionHashes(t *testing.T) {
+	for _, inline := range []bool{false, true} {
+		draft, current := fixture()
+		plan, err := PrepareWithOptions(draft, current, Options{Inline: inline})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, removed := range []string{"Base:", "Head:", draft.Job.BaseSHA, draft.Job.HeadSHA} {
+			if strings.Contains(plan.Body, removed) {
+				t.Fatalf("revision metadata still appears in the comment: %q", removed)
+			}
+		}
+		if plan.BaseSHA != draft.Job.BaseSHA || plan.HeadSHA != draft.Job.HeadSHA {
+			t.Fatal("revision metadata was removed from publication validation")
+		}
+		for _, changeBase := range []bool{false, true} {
+			changedDraft, changedCurrent := draft, current
+			if changeBase {
+				changedDraft.Job.BaseSHA = strings.Repeat("c", 40)
+				changedCurrent.PullRequest.Base.SHA = changedDraft.Job.BaseSHA
+			} else {
+				changedDraft.Job.HeadSHA = strings.Repeat("c", 40)
+				changedCurrent.PullRequest.Head.SHA = changedDraft.Job.HeadSHA
+			}
+			changed, err := PrepareWithOptions(changedDraft, changedCurrent, Options{Inline: inline})
+			if err != nil || changed.Key == plan.Key {
+				t.Fatalf("confirmation no longer binds the reviewed revisions: %v", err)
+			}
+		}
+	}
+}
+
+func TestHashRemovalRecognizesBothOlderCommentFormats(t *testing.T) {
+	draft, current := fixture()
+	draft.Report.Findings[0].FailureScenario = "The `AuthorizeReset` function doesn't check the account."
+	plan, err := PrepareWithOptions(draft, current, Options{Inline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.legacy == nil || plan.legacy.legacy == nil {
+		t.Fatal("both previous publication formats are required")
+	}
+	for old := plan.legacy; old != nil; old = old.legacy {
+		for _, uncertain := range []bool{false, true} {
+			api := &fakeAPI{current: current.PullRequest}
+			dir := t.TempDir()
+			if uncertain {
+				if err := os.WriteFile(filepath.Join(dir, "7-"+old.Key+".json"), []byte("{}"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if _, err := Publish(context.Background(), api, *old, old.Key, dir); err != nil {
+				t.Fatal(err)
+			}
+			before := api.posts
+			outcome, err := Publish(context.Background(), api, plan, plan.Key, dir)
+			if (err == nil) == uncertain || (!uncertain && !outcome.Existing) || api.posts != before {
+				t.Fatalf("header change caused a duplicate review: outcome=%+v err=%v", outcome, err)
+			}
+		}
+	}
+}
+
+func TestReconciliationPlanCannotAuthorizeNewPublication(t *testing.T) {
+	draft, current := fixture()
+	for _, inline := range []bool{false, true} {
+		fresh, err := PrepareWithOptions(draft, current, Options{Inline: inline})
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior, err := PrepareForReconciliation(draft, Options{Inline: inline})
+		if err != nil || prior.Key != fresh.Key || prior.Body != fresh.Body {
+			t.Fatalf("retry rendering changed the confirmation: %v", err)
+		}
+		api := &fakeAPI{current: current.PullRequest}
+		if outcome, err := Reconcile(context.Background(), api, prior, prior.Key); err != nil || outcome.Existing || api.posts != 0 {
+			t.Fatalf("reconciliation must remain read-only: %+v %v", outcome, err)
+		}
+		if _, err := Publish(context.Background(), api, prior, prior.Key, t.TempDir()); err == nil || api.posts != 0 {
+			t.Fatal("a reconciliation plan authorized a new POST")
+		}
+		if _, err := Publish(context.Background(), api, fresh, fresh.Key, t.TempDir()); err != nil {
+			t.Fatal(err)
+		}
+		api.current.State = "closed"
+		api.current.Head.SHA = strings.Repeat("c", 40)
+		if outcome, err := Reconcile(context.Background(), api, prior, prior.Key); err != nil || !outcome.Existing || api.posts != 1 {
+			t.Fatalf("completed review did not reconcile after closure: %+v %v", outcome, err)
+		}
 	}
 }

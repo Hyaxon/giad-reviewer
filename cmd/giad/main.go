@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -34,10 +35,14 @@ to attach findings to source lines and --event REQUEST_CHANGES to request change
 	cmd.AddCommand(newPRCommand())
 	cmd.AddCommand(newReviewCommand())
 	cmd.AddCommand(newPublishCommand())
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := shutdownContext(context.Background())
 	defer stop()
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "giad:", err)
 		os.Exit(1)
 	}
+}
+
+func shutdownContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 }

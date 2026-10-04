@@ -28,6 +28,8 @@ type Plan struct {
 	BaseSHA, HeadSHA, Body, Key string
 	Event                       string
 	Comments                    []githubapi.InlineComment
+	legacy                      *Plan
+	reconcileOnly               bool
 }
 
 type Options struct {
@@ -93,6 +95,40 @@ func Prepare(draft review.Result, current githubapi.PRContext) (Plan, error) {
 // PrepareWithOptions validates every inline anchor against fresh head-side diff
 // hunks. The human chooses the event and placement, independently of the agent.
 func PrepareWithOptions(draft review.Result, current githubapi.PRContext, options Options) (Plan, error) {
+	return preparePlans(draft, &current, options)
+}
+
+// PrepareForReconciliation renders the confirmed content without requiring the
+// PR to remain open or unchanged. Use only with the read-only Reconcile operation;
+// a new publication still requires PrepareWithOptions against fresh PR context.
+func PrepareForReconciliation(draft review.Result, options Options) (Plan, error) {
+	return preparePlans(draft, nil, options)
+}
+
+func preparePlans(draft review.Result, current *githubapi.PRContext, options Options) (Plan, error) {
+	plan, err := prepareWithRenderer(draft, current, options, text, false)
+	if err != nil {
+		return Plan{}, err
+	}
+	// Keep the exact old formatting for read-only retry reconciliation.
+	legacy, err := prepareWithRenderer(draft, current, options, legacyText, true)
+	if err != nil {
+		return Plan{}, err
+	}
+	if legacy.Key != plan.Key {
+		plan.legacy = &legacy
+	}
+	previous, err := prepareWithRenderer(draft, current, options, text, true)
+	if err != nil {
+		return Plan{}, err
+	}
+	if previous.Key != plan.Key && previous.Key != legacy.Key {
+		legacy.legacy = &previous
+	}
+	return plan, nil
+}
+
+func prepareWithRenderer(draft review.Result, current *githubapi.PRContext, options Options, text func(string) string, showRevisions bool) (Plan, error) {
 	options, err := options.Normalize()
 	if err != nil {
 		return Plan{}, err
@@ -105,32 +141,47 @@ func PrepareWithOptions(draft review.Result, current githubapi.PRContext, option
 		return Plan{}, err
 	}
 	job := draft.Job
-	if !shaPattern.MatchString(job.BaseSHA) || !shaPattern.MatchString(job.HeadSHA) || current.PullRequest.Number != job.Number || current.PullRequest.Base.SHA != job.BaseSHA || current.PullRequest.Head.SHA != job.HeadSHA {
+	if !shaPattern.MatchString(job.BaseSHA) || !shaPattern.MatchString(job.HeadSHA) {
+		return Plan{}, errors.New("draft requires full base/head commit SHAs")
+	}
+	if current != nil && (current.PullRequest.Number != job.Number || current.PullRequest.Base.SHA != job.BaseSHA || current.PullRequest.Head.SHA != job.HeadSHA) {
 		return Plan{}, errors.New("draft revisions do not match the current PR; run a new review")
 	}
-	if current.PullRequest.State != "open" {
+	if current != nil && current.PullRequest.State != "open" {
 		return Plan{}, errors.New("publication requires an open PR")
 	}
 	if draft.Agent == "" || len(draft.Agent) > 128 || strings.TrimSpace(draft.Report.Summary) == "" || len(draft.Report.Summary) > 8192 || len(draft.Report.Limitations) > 16384 || draft.Report.Findings == nil || len(draft.Report.Findings) > 20 {
 		return Plan{}, errors.New("invalid or oversized draft report")
 	}
-	anchors, err := diffAnchors(current.Diff)
-	if err != nil {
-		return Plan{}, err
-	}
+	var anchors map[string][][2]int
 	changed := map[string]bool{}
-	for _, file := range current.Files {
-		changed[file.Filename] = file.Status != "removed"
+	if current != nil {
+		if options.Inline {
+			anchors, err = diffAnchors(current.Diff)
+			if err != nil {
+				return Plan{}, err
+			}
+		}
+		for _, file := range current.Files {
+			changed[file.Filename] = file.Status != "removed"
+		}
 	}
 	var body strings.Builder
 	var comments []githubapi.InlineComment
-	fmt.Fprintf(&body, "## GIAD review — %s\n\nBase: `%s`\nHead: `%s`\n\n%s\n", text(draft.Agent), job.BaseSHA, job.HeadSHA, text(draft.Report.Summary))
+	fmt.Fprintf(&body, "## GIAD review — %s\n\n", text(draft.Agent))
+	if showRevisions {
+		fmt.Fprintf(&body, "Base: `%s`\nHead: `%s`\n\n", job.BaseSHA, job.HeadSHA)
+	}
+	fmt.Fprintf(&body, "%s\n", text(draft.Report.Summary))
 	for _, f := range draft.Report.Findings {
+		if !fs.ValidPath(f.File) || strings.ContainsAny(f.File, "\\\x00\r\n") || f.Line < 1 {
+			return Plan{}, errors.New("finding requires a valid file and positive head line")
+		}
 		anchored := false
 		for _, span := range anchors[f.File] {
 			anchored = anchored || (f.Line >= span[0] && f.Line < span[1])
 		}
-		if !changed[f.File] || !anchored {
+		if current != nil && (!changed[f.File] || (options.Inline && !anchored)) {
 			return Plan{}, fmt.Errorf("finding is outside the current head diff: %s:%d", f.File, f.Line)
 		}
 		if (f.Severity != "high" && f.Severity != "medium" && f.Severity != "low") || f.Confidence < 0 || f.Confidence > 1 {
@@ -200,11 +251,11 @@ func PrepareWithOptions(draft review.Result, current githubapi.PRContext, option
 	sum := sha256.Sum256([]byte(identity))
 	key := hex.EncodeToString(sum[:])
 	fmt.Fprintf(&body, "\n<!-- giad-publication:%s -->\n", key)
-	return Plan{Repository: repo, Number: job.Number, BaseSHA: job.BaseSHA, HeadSHA: job.HeadSHA, Body: body.String(), Key: key, Event: options.Event, Comments: comments}, nil
+	return Plan{Repository: repo, Number: job.Number, BaseSHA: job.BaseSHA, HeadSHA: job.HeadSHA, Body: body.String(), Key: key, Event: options.Event, Comments: comments, reconcileOnly: current == nil}, nil
 }
 
-// Render agent text literally, suppressing HTML, Markdown links, and mentions.
-func text(value string) string {
+// legacyText is retained only to recognize previous publication attempts.
+func legacyText(value string) string {
 	value = html.EscapeString(value)
 	replacer := strings.NewReplacer("\\", "\\\\", "`", "\\`", "*", "\\*", "_", "\\_", "[", "\\[", "]", "\\]", "#", "\\#", "!", "\\!", "@", "&#64;")
 	return replacer.Replace(value)
@@ -254,7 +305,9 @@ func diffAnchors(diff string) (map[string][][2]int, error) {
 		}
 		if strings.HasPrefix(line, "+++ ") {
 			header = true
-			name := strings.TrimPrefix(line, "+++ ")
+			// Git terminates unquoted paths containing spaces with a tab.
+			// Quoted paths encode literal tabs, so split before unquoting.
+			name, _, _ := strings.Cut(strings.TrimPrefix(line, "+++ "), "\t")
 			if strings.HasPrefix(name, "\"") {
 				var err error
 				name, err = strconv.Unquote(name)

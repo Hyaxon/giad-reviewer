@@ -64,6 +64,9 @@ func reviewsPath(repo githubauth.Repository, number int) string {
 	return fmt.Sprintf("/repos/%s/%s/pulls/%d/reviews", url.PathEscape(repo.Owner), url.PathEscape(repo.Name), number)
 }
 func (c *Client) ReviewAuthor(ctx context.Context, repo githubauth.Repository) (int64, error) {
+	if auth, ok := c.auth.(githubauth.AuthorProvider); ok {
+		return auth.ReviewAuthor(ctx, repo)
+	}
 	data, err := c.request(ctx, repo, http.MethodGet, "/user", "application/vnd.github+json", nil)
 	if err != nil {
 		return 0, err
@@ -96,11 +99,6 @@ func (c *Client) ListReviews(ctx context.Context, repo githubauth.Repository, nu
 		}
 	}
 	return nil, errors.New("review listing exceeds 10000 entries; refusing incomplete retry check")
-}
-
-// CreateCommentReview retains the original body-only operation.
-func (c *Client) CreateCommentReview(ctx context.Context, repo githubauth.Repository, number int, head, body string) (Review, error) {
-	return c.CreateReview(ctx, repo, number, ReviewSubmission{CommitID: head, Body: body, Event: "COMMENT"})
 }
 
 // CreateReview submits the event, summary and inline comments in a single write.

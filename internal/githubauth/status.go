@@ -10,7 +10,7 @@ import (
 )
 
 // VerifyUser checks the identity represented by a user token, not gh's display
-// settings. App installation tokens will need a different identity check.
+// settings. App providers use githubapp.Provider.Verify instead.
 func VerifyUser(ctx context.Context, auth Provider) (string, error) {
 	client := &http.Client{
 		Timeout: 15 * time.Second,

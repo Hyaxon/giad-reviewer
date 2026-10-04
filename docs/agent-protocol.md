@@ -1,7 +1,8 @@
 # Agent protocol
 
 For agent authors. Wire types live in [protocol.go](../pkg/protocol/protocol.go)
-and [model.go](../pkg/protocol/model.go); use those as the schema reference.
+and [model.go](../pkg/protocol/model.go); test types are in
+[tests.go](../pkg/protocol/tests.go). Use these as the schema reference.
 
 ## Launch and framing
 
@@ -21,8 +22,8 @@ it in failed-session diagnostics after cleanup.
 The host starts with a `review.start` frame whose `params` is a `Job`: repository,
 PR metadata, base/head SHAs, changed files, linked issues, scoped trusted instructions,
 granted capabilities, model profile names, and approved `testProfiles` names.
-`issuesError` marks unavailable issue
-context. Instructions/issues are included only when granted; existing AGENTS.md
+`issuesError` marks unavailable issue context. Instructions/issues are included
+only when granted; existing AGENTS.md
 requires the instruction capability.
 
 Only `trustedInstructions` is guidance. Apply each instruction within its `scope`;
@@ -99,9 +100,15 @@ Finding fields must be nonempty. Severity is `high`, `medium`, or `low`; confide
 is in [0,1]. Anchors must reference lines read through `repository.read` in changed,
 nondeleted head files. Summary-only/deleted-file findings are not supported.
 These checks establish structure, not factual correctness or GitHub inline coordinates.
+Body-only publication supports these inspected anchors outside diff hunks. Inline
+publication additionally requires the line to lie in a current head-side diff hunk.
+Publication preserves inline code and complete fenced blocks in report text;
+prose outside code is escaped to suppress HTML, Markdown links, and mentions.
 
 After acceptance the host removes the agent container, terminating its processes.
 EOF, timeout, exhausted budgets, failed cleanup, or no valid completion fails the review.
+Each finish attempt is validated independently; a correction must supply a complete
+report. SIGINT and SIGTERM cancel the command and run its cleanup path.
 
 Limits: 1 MiB frames; 256 KiB initial job; 64 requests/4 MiB incoming data;
 16 model calls/96 KiB per model request; 64 KiB reports with at most 20 findings

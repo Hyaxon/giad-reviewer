@@ -1,78 +1,73 @@
 # Runtime design
 
-GIAD owns execution and access. Separate agents own review judgment. A composite
-agent such as MAGI is one installed package, with its own reviewer names and prompts.
+GIAD owns execution and access. Installed agents own prompts and review judgment.
+MAGI and other specialist reviewers belong in separate agent projects.
 
 ```text
-GitHub PR -> verified checkout + base instructions -> agent process
-                                                     |
-                                            repository/model broker
-                                                     |
-                                               local draft
+GitHub PR -> pinned checkout + base guidance -> sandboxed agent
+                                                  |
+                                        host capability broker
+                                                  |
+                                             local draft
+                                                  |
+                                       preview + confirmation
+                                                  |
+                                           GitHub review
 ```
 
-| Location | Responsibility |
-| --- | --- |
-| `cmd/giad` | CLI and output |
-| `internal/review`, `internal/agents` | Orchestration, process launch, capability checks, draft validation |
-| `internal/github*`, `internal/repo`, `internal/instructions` | Auth, PR context, disposable checkouts, base-revision AGENTS.md |
-| `internal/tools`, `internal/model` | Bounded repository access and optional model profiles/lifecycle |
-| `internal/sandbox` | Separate Docker agent/test isolation and a trusted host backend used only by offline tests |
-| `pkg/protocol` | Public `giad/v1` wire types |
-| `example/diff-inspector` | Independent, model-free protocol example |
+## Boundaries
 
-The runtime verifies exact base/head commits and cleans up disposable resources.
-Scoped AGENTS.md guidance comes from the base revision; head edits and other
-repository/issue text remain evidence. Agents request only declared/granted
-capabilities. GitHub credentials stay in the host; model endpoints/tags come from
-host configuration. Models unload before profile switches and at session cleanup.
+- **Host:** GitHub credentials, trusted configuration, checkout, repository reads,
+  model transport/lifecycle, sandbox management, draft validation, publication.
+- **Agent container:** installed review package and private temporary space;
+  no network, host mounts, credentials, or container-engine socket.
+- **Test container:** a copied head workspace and a fixed approved command;
+  separate from the agent, with no network or host mounts.
 
-Reviews are serial and return local drafts. `--preview` is explicit but optional;
-disabling it is rejected. A separate `publish` command previews and confirms a
-saved draft's GitHub review. Structural finding validation is not proof of
-correctness. Failed sessions do not become clean reviews.
+All CLI agents use Docker, including model-free examples. Locally installed Linux
+images are resolved to immutable IDs; images with `VOLUME` declarations are rejected.
+Containers are non-root, have dropped privileges, and enforce resource/deadline
+limits. Cleanup removes their processes. Launch failures never fall back to host
+execution. The trusted host launcher is used only by offline tests.
 
-## Next milestones
+Root and scoped AGENTS.md come from exact base Git objects, including previous
+paths for renames. PR text, issues, source, head guidance, model answers, and test
+output remain evidence. Required capabilities must be declared, granted, and
+implemented. GitHub keys/tokens and model endpoints stay in the host.
 
-The GIAD naming migration and real diff-inspector integration are in place.
+## Current scope
 
-CLI reviews use `DockerLauncher`. Installed images are read-only, non-root, without
-network or host mounts, with resource limits and bounded temporary space. Removing
-the container terminates its processes. Launch failures never trigger a host fallback.
-Docker and agent images must be available before review; no PR code is executed to
-install/build an agent. The Docker engine and installed images are trusted infrastructure.
+Reviews run serially, one agent package per command. Models are optional and
+currently use Ollama. GIAD retains a model through the session, unloads before
+profile switches, and cleans it up afterward. Parallel use needs shared-resource
+leases before it can be supported.
 
-The optional `example/code-review` package now exercises source reads, scoped
-guidance, host model calls, and anchored findings through the same public contract.
-Integration checks use scripted judgments; model quality needs separate evaluation.
+Tests run only when an agent requests an approved profile. GIAD records observed
+results independently of the agent. Runs are head-only; profiles and dependencies
+must already exist in trusted images. Failed sessions never become clean reviews.
+Finding validation checks structure and inspected anchors, not factual correctness.
 
-Approved `tests.run` profiles now execute in fresh containers with copied head
-files, no Git metadata, and bounded scratch/output/time. The host retains actual
-results independently of the agent report. Agent-requested runs are supported;
-baseline runs and base comparisons remain future work. Test code never runs on
-the host. Dependencies are prepared in trusted images before review.
+Publication is a separate, confirmed `COMMENT` or `REQUEST_CHANGES` review.
+Optional inline findings use single head-side diff lines. Retries match the author,
+action, commit, body, and comments; durable attempt records prevent blind resends.
+Completed reviews can reconcile after the PR changes or closes; only new writes
+require current revisions, an open PR, and valid inline anchors. Body-only findings
+can refer to inspected lines elsewhere in a changed head file.
+Previous comment formats remain recognizable after presentation changes.
+A final revision check narrows the write race; GitHub's review `commit_id` pins the
+inspected head but supplies no atomic base/head precondition.
 
-Saved drafts support separately confirmed `COMMENT` or `REQUEST_CHANGES` publication. The command
-rechecks base/head commits and finding anchors against the current diff, presents
-the body, and requires its confirmation hash. `--inline` attaches findings to their
-validated head-side lines; the preview displays every comment. The confirmation
-hash binds the action and all comment paths, lines, sides, and bodies. Approval
-and deleted-line/multiline anchors are not implemented.
-Exact body/commit/author/action and inline-comment matching reconcile retries.
-Dismissed request-changes reviews remain completed attempts. Durable exclusive attempt
-records in the user's cache prevent blind resends after crashes or network errors;
-unresolved attempts require checking GitHub manually. Explicit GitHub rejections
-release the attempt record and report the refusal reason. GitHub has no atomic
-base/head precondition for this write: the final revision check narrows the race,
-and `commit_id` pins the review to the inspected head. Draft files are trusted,
-user-editable artifacts; a changed body requires a new confirmation hash.
+Personal auth uses GitHub CLI. Explicit App mode uses repository-scoped installation
+tokens with in-memory caching/refresh and the bot's durable user ID for retries.
 
-Next: GitHub App authentication/setup and richer issue selection. Model-resource
-leases must precede parallel jobs. Workers can wait.
+## Planned work
 
-## Compatibility
+See [current limitations](../README.md#current-limitations) and
+[planned features and checks](../README.md#planned-features-and-checks) for supported
+scope and future direction. The optional hosted service is a proposal;
+the current implementation is the manual self-hosted workflow. Generated test
+patches and approval are also outside the current scope.
 
-The module/CLI/config names are GIAD; the wire prefix is `giad/v1`. Old
-`agentic-review/v1` manifests/frames are rejected with no silent alias. Retain
-`github.linked_issues` as the capability name. The local folder and GitHub remote
-still use the historical repository name until an administrative rename occurs.
+The CLI/module/config names are GIAD and the wire version is `giad/v1`.
+Old `agentic-review/v1` frames and manifests are rejected.
+The V1 public contract is `giad/v1`; incompatible changes require a new wire version.

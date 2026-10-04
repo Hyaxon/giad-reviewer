@@ -25,32 +25,82 @@ type Outcome struct {
 	Existing bool
 }
 
+func confirmedPlans(plan Plan, confirmation string) ([]Plan, bool, error) {
+	candidates := []Plan{plan}
+	legacyConfirmed := false
+	for previous := plan.legacy; previous != nil; previous = previous.legacy {
+		candidates = append(candidates, *previous)
+		legacyConfirmed = legacyConfirmed || confirmation == previous.Key
+	}
+	if confirmation == "" || (confirmation != plan.Key && !legacyConfirmed) {
+		return nil, false, errors.New("confirmation does not match this publication; preview the draft again")
+	}
+	return candidates, legacyConfirmed, nil
+}
+
+// Reconcile recognizes a completed confirmed review without posting or requiring
+// current PR revisions. A missing match returns an empty outcome; errors remain
+// explicit so an unavailable retry check cannot become permission to resend.
+func Reconcile(ctx context.Context, api API, plan Plan, confirmation string) (Outcome, error) {
+	candidates, _, err := confirmedPlans(plan, confirmation)
+	if err != nil {
+		return Outcome{}, err
+	}
+	outcome, _, err := reconcile(ctx, api, plan, candidates)
+	return outcome, err
+}
+
+func reconcile(ctx context.Context, api API, plan Plan, candidates []Plan) (Outcome, int64, error) {
+	state, err := githubapi.ReviewState(plan.Event)
+	if err != nil {
+		return Outcome{}, 0, err
+	}
+	author, err := api.ReviewAuthor(ctx, plan.Repository)
+	if err != nil {
+		return Outcome{}, 0, err
+	}
+	reviews, err := api.ListReviews(ctx, plan.Repository, plan.Number)
+	if err != nil {
+		return Outcome{}, 0, err
+	}
+	for _, candidate := range candidates {
+		for _, existing := range reviews {
+			completed := existing.State == state || (plan.Event == "REQUEST_CHANGES" && existing.State == "DISMISSED")
+			if existing.User.ID == author && completed && existing.CommitID == candidate.HeadSHA && existing.Body == candidate.Body {
+				if err := verifyComments(ctx, api, candidate, existing.ID); err != nil {
+					return Outcome{}, 0, err
+				}
+				return Outcome{Review: existing, Existing: true}, author, nil
+			}
+		}
+	}
+	return Outcome{}, author, nil
+}
+
 // Publish requires confirmation of the exact prepared body and revisions.
 // An exclusive durable local attempt file prevents blind resends after crashes
 // or ambiguous HTTP failures. Reconciliation is read-only and author-specific.
 func Publish(ctx context.Context, api API, plan Plan, confirmation, stateDir string) (Outcome, error) {
-	if confirmation == "" || confirmation != plan.Key {
-		return Outcome{}, errors.New("confirmation does not match this publication; preview the draft again")
-	}
-	state, err := githubapi.ReviewState(plan.Event)
+	candidates, legacyConfirmed, err := confirmedPlans(plan, confirmation)
 	if err != nil {
 		return Outcome{}, err
 	}
-	author, err := api.ReviewAuthor(ctx, plan.Repository)
-	if err != nil {
-		return Outcome{}, err
+	outcome, author, err := reconcile(ctx, api, plan, candidates)
+	if err != nil || outcome.Existing {
+		return outcome, err
 	}
-	reviews, err := api.ListReviews(ctx, plan.Repository, plan.Number)
-	if err != nil {
-		return Outcome{}, err
+	if plan.reconcileOnly {
+		return Outcome{}, errors.New("new publication requires fresh PR and anchor validation")
 	}
-	for _, existing := range reviews {
-		completed := existing.State == state || (plan.Event == "REQUEST_CHANGES" && existing.State == "DISMISSED")
-		if existing.User.ID == author && completed && existing.CommitID == plan.HeadSHA && existing.Body == plan.Body {
-			if err := verifyComments(ctx, api, plan, existing.ID); err != nil {
-				return Outcome{}, err
-			}
-			return Outcome{Review: existing, Existing: true}, nil
+	if legacyConfirmed {
+		return Outcome{}, errors.New("publication formatting changed; preview again and confirm the new hash before posting")
+	}
+	for _, previous := range candidates[1:] {
+		oldAttempt := filepath.Join(stateDir, fmt.Sprintf("%d-%s.json", author, previous.Key))
+		if _, err := os.Stat(oldAttempt); err == nil {
+			return Outcome{}, errors.New("a previous publication attempt has no matching GitHub review; outcome unknown, refusing another POST. Check GitHub manually and retain the attempt record")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return Outcome{}, err
 		}
 	}
 	latest, err := api.GetPullRequest(ctx, plan.Repository, plan.Number)

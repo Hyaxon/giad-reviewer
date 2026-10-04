@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/hyaxon/giad/internal/githubapi"
-	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/hyaxon/giad/internal/repo"
 	"github.com/hyaxon/giad/internal/tools"
 	"github.com/spf13/cobra"
@@ -33,7 +32,10 @@ func newInspectCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			auth := githubauth.UserAuth{}
+			auth, err := commandAuth(cmd)
+			if err != nil {
+				return err
+			}
 			context, err := githubapi.NewClient(auth).GetPRContext(cmd.Context(), target, number)
 			if err != nil {
 				return err

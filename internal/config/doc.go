@@ -1,2 +1,2 @@
-// Package config will load and validate TOML and environment configuration.
+// Package config loads explicitly selected runtime policy and App identity TOML.
 package config

@@ -15,7 +15,7 @@
       "github.linked_issues",
       "model.chat"
     ],
-    "optional": ["tests.run", "web.search"]
+    "optional": ["tests.run"]
   },
   "modelProfiles": ["review"]
 }

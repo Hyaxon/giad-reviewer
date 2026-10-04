@@ -13,7 +13,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type publicationClient interface {
+	publication.API
+	GetPRContext(context.Context, githubauth.Repository, int) (githubapi.PRContext, error)
+}
+
 func newPublishCommand() *cobra.Command {
+	return newPublishCommandWithClient(nil)
+}
+
+func newPublishCommandWithClient(client publicationClient) *cobra.Command {
 	var confirmation, event string
 	var inline bool
 	cmd := &cobra.Command{
@@ -32,9 +41,31 @@ func newPublishCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client := githubapi.NewClient(githubauth.UserAuth{})
+			if client == nil {
+				auth, err := commandAuth(cmd)
+				if err != nil {
+					return err
+				}
+				client = githubapi.NewClient(auth)
+			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 			defer cancel()
+			if confirmation != "" {
+				// Recognize the confirmed write even after a push or merge. This
+				// path performs no POST; fresh checks below still govern new writes.
+				prior, err := publication.PrepareForReconciliation(draft, options)
+				if err != nil {
+					return err
+				}
+				outcome, err := publication.Reconcile(ctx, client, prior, confirmation)
+				if err != nil {
+					return err
+				}
+				if outcome.Existing {
+					_, err := fmt.Fprintf(cmd.OutOrStdout(), "Already published: %s\n", outcome.Review.URL)
+					return err
+				}
+			}
 			current, err := client.GetPRContext(ctx, repo, draft.Job.Number)
 			if err != nil {
 				return err
@@ -52,7 +83,7 @@ func newPublishCommand() *cobra.Command {
 				}
 			}
 			if confirmation == "" {
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Nothing published. Rerun with the same --event/--inline options and --confirm %s\n", plan.Key)
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Nothing published. Rerun with the same --identity/--event/--inline options and --confirm %s\n", plan.Key)
 				return err
 			}
 			cache, err := os.UserCacheDir()
@@ -71,6 +102,7 @@ func newPublishCommand() *cobra.Command {
 			return err
 		},
 	}
+	addIdentityFlag(cmd)
 	cmd.Flags().StringVar(&confirmation, "confirm", "", "Confirmation hash printed by a prior publication preview")
 	cmd.Flags().StringVar(&event, "event", "COMMENT", "GitHub review event: COMMENT or REQUEST_CHANGES")
 	cmd.Flags().BoolVar(&inline, "inline", false, "Attach each finding as a head-side inline comment")

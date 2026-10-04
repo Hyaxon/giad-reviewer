@@ -17,12 +17,11 @@ capabilities = [
   "model.chat",
 ]
 
-# To enable tests, also declare/grant "tests.run" and add
-# test_profiles = ["go"] under [agents.reviewer]. Run make images first.
+# To enable tests, grant "tests.run" and add test_profiles = ["go"] under
+# [agents.reviewer]. The manifest template already declares it as optional.
+# Run make images first; this Go image caches this repository's dependencies.
 [tests.go]
 image = "giad-go-tests:example"
 command = "/usr/local/go/bin/go"
 args = ["test", "-p", "1", "./..."]
 timeout_seconds = 120
-
-# workspace.write, web.search and browser are currently unavailable.

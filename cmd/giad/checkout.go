@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/hyaxon/giad/internal/githubapi"
-	"github.com/hyaxon/giad/internal/githubauth"
 	"github.com/hyaxon/giad/internal/repo"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +22,10 @@ func newCheckoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			auth := githubauth.UserAuth{}
+			auth, err := commandAuth(cmd)
+			if err != nil {
+				return err
+			}
 			pr, err := githubapi.NewClient(auth).GetPullRequest(cmd.Context(), target, number)
 			if err != nil {
 				return err

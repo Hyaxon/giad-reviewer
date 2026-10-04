@@ -17,8 +17,8 @@ type fetchPullRequest func(context.Context, githubauth.Repository, int) (githuba
 
 func newPRCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "pr", Short: "Read GitHub pull requests"}
-	client := githubapi.NewClient(githubauth.UserAuth{})
-	cmd.AddCommand(newPRViewCommand(client.GetPRContext))
+	addIdentityFlag(cmd)
+	cmd.AddCommand(newPRViewCommand(nil))
 	cmd.AddCommand(newCheckoutCommand())
 	cmd.AddCommand(newInspectCommand())
 	return cmd
@@ -37,7 +37,15 @@ func newPRViewCommand(fetch fetchPullRequest) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			result, err := fetch(cmd.Context(), repo, number)
+			fetchPR := fetch
+			if fetchPR == nil {
+				auth, err := commandAuth(cmd)
+				if err != nil {
+					return err
+				}
+				fetchPR = githubapi.NewClient(auth).GetPRContext
+			}
+			result, err := fetchPR(cmd.Context(), repo, number)
 			if err != nil {
 				return err
 			}

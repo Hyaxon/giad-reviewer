@@ -397,3 +397,31 @@ func TestDockerDiffInspectorIntegration(t *testing.T) {
 		t.Fatalf("isolated diff broker: report=%+v err=%v", report, err)
 	}
 }
+
+func TestRejectedFinishDoesNotPopulateLaterRequests(t *testing.T) {
+	for _, retry := range []string{`{}`, `null`, `{"summary":"New attempt"}`} {
+		t.Run(retry, func(t *testing.T) {
+			s := fixtureSession(t, "success")
+			frames := `{"apiVersion":"giad/v1","id":"bad","method":"review.finish","params":{"summary":"Rejected report","limitations":"","findings":[],"unsupported":true}}` + "\n" +
+				`{"apiVersion":"giad/v1","id":"retry","method":"review.finish","params":` + retry + "}\n"
+			p := &cleanupFailureProcess{output: strings.NewReader(frames)}
+			s.Launcher = launchFunc(func(context.Context, sandbox.Command) (sandbox.Process, error) { return p, nil })
+			report, err := s.Run(context.Background())
+			if err == nil || report.Summary != "" || strings.Contains(p.input.String(), `"accepted":true`) {
+				t.Fatalf("rejected report became an accepted completion: report=%+v replies=%s err=%v", report, p.input.String(), err)
+			}
+		})
+	}
+}
+
+func TestRejectedFinishAllowsCompleteCorrection(t *testing.T) {
+	s := fixtureSession(t, "success")
+	frames := `{"apiVersion":"giad/v1","id":"bad","method":"review.finish","params":{"summary":"Rejected report","limitations":"","findings":[],"unsupported":true}}` + "\n" +
+		`{"apiVersion":"giad/v1","id":"fixed","method":"review.finish","params":{"summary":"Corrected report","limitations":"New limitations","findings":[]}}` + "\n"
+	p := &cleanupFailureProcess{output: strings.NewReader(frames)}
+	s.Launcher = launchFunc(func(context.Context, sandbox.Command) (sandbox.Process, error) { return p, nil })
+	report, err := s.Run(context.Background())
+	if err != nil || report.Summary != "Corrected report" || !strings.Contains(report.Limitations, "New limitations") {
+		t.Fatalf("complete correction was not accepted: report=%+v err=%v", report, err)
+	}
+}
