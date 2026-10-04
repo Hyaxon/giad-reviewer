@@ -48,14 +48,14 @@ Skip the `gh` check if you will use App authentication.
 Once the release tag is available on GitHub, use a fresh directory:
 
 ```sh
-git clone --branch v1.0.0 git@github.com:Hyaxon/giad.git
+git clone --branch v1.1.0 git@github.com:Hyaxon/giad.git
 cd giad
 make all
 make images
 ./bin/giad --version
 ```
 
-Expect `giad version 1.0.0`. V1 is distributed through the source repository;
+Expect `giad version 1.1.0`. V1 is distributed through the source repository;
 `make all` builds the CLI and generates the Go example's manifest. `make images`
 builds the trusted example agent and Go test images. These setup commands do not
 review a PR or publish anything. Reviews never build or pull missing images.
