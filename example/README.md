@@ -27,6 +27,11 @@ The Go diff-inspector is the model-free quickstart in [the main README](../READM
 
 ## Save and publish model-free examples
 
+These commands use GitHub App authentication. First copy
+[identity.example.toml](../identity.example.toml) to `identity.toml` and fill in
+your App ID, Client ID, installation ID, and private-key path using
+[the App authentication setup](../docs/configuration.md#authentication).
+
 From the repository root, build both examples and add the local CLI to this shell's
 `PATH`. Neither agent needs Ollama:
 

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -136,6 +137,184 @@ func TestRepositoryTokensScopeCacheAndRefresh(t *testing.T) {
 	got, err := p.Token(context.Background(), repo)
 	if got != "" || err == nil || strings.Contains(err.Error(), "secret-token") || len(p.tokens) != 1 {
 		t.Fatalf("failed refresh returned stale credentials or exposed response: %v", err)
+	}
+}
+
+type tokenResult struct {
+	token string
+	err   error
+}
+
+func startToken(p *Provider, ctx context.Context, repo githubauth.Repository) <-chan tokenResult {
+	done := make(chan tokenResult, 1)
+	go func() {
+		token, err := p.Token(ctx, repo)
+		done <- tokenResult{token, err}
+	}()
+	return done
+}
+
+func awaitToken(t *testing.T, done <-chan tokenResult) tokenResult {
+	t.Helper()
+	select {
+	case result := <-done:
+		return result
+	case <-time.After(5 * time.Second):
+		t.Fatal("token request did not return promptly")
+		return tokenResult{}
+	}
+}
+
+// Signal when a caller starts its context-aware wait, without timing sleeps.
+type tokenWaitingContext struct {
+	context.Context
+	waiting chan struct{}
+	once    sync.Once
+}
+
+func (c *tokenWaitingContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.waiting) })
+	return c.Context.Done()
+}
+
+func awaitTokenWait(t *testing.T, ctx *tokenWaitingContext) {
+	t.Helper()
+	select {
+	case <-ctx.waiting:
+	case <-time.After(5 * time.Second):
+		t.Fatal("token caller did not enter a cancellable wait")
+	}
+}
+
+func TestTokenWaiterCancellationDuringRefresh(t *testing.T) {
+	p := testProvider(t)
+	started, release := make(chan struct{}), make(chan struct{})
+	p.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method == http.MethodGet {
+			close(started)
+			<-release
+			return response(200, installedJSON), nil
+		}
+		return response(201, tokenJSON(time.Now().Add(time.Hour), "fresh")), nil
+	})
+	repo := githubauth.Repository{Owner: "owner", Name: "repo"}
+	leader := startToken(p, context.Background(), repo)
+	defer func() {
+		close(release)
+		if result := awaitToken(t, leader); result.err != nil || result.token != "fresh" {
+			t.Errorf("waiter cancellation interrupted the active refresh: %v", result.err)
+		}
+	}()
+	<-started
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	waitCtx := &tokenWaitingContext{Context: ctx, waiting: make(chan struct{})}
+	waiter := startToken(p, waitCtx, repo)
+	awaitTokenWait(t, waitCtx)
+	cancel()
+	if result := awaitToken(t, waiter); result.token != "" || result.err != context.Canceled {
+		t.Fatalf("canceled waiter returned token=%q err=%v", result.token, result.err)
+	}
+}
+
+func TestTokenRefreshDoesNotBlockOtherRepositories(t *testing.T) {
+	for _, cached := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cached=%t", cached), func(t *testing.T) {
+			p := testProvider(t)
+			if cached {
+				p.tokens["owner/other"] = accessToken{Token: "other-token", ExpiresAt: time.Now().Add(time.Hour)}
+			}
+			started, release := make(chan struct{}), make(chan struct{})
+			p.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodGet {
+					if r.URL.Path == "/repos/owner/repo/installation" {
+						close(started)
+						<-release
+					}
+					return response(200, installedJSON), nil
+				}
+				return response(201, tokenJSON(time.Now().Add(time.Hour), "other-token")), nil
+			})
+			leader := startToken(p, context.Background(), githubauth.Repository{Owner: "owner", Name: "repo"})
+			defer func() {
+				close(release)
+				if result := awaitToken(t, leader); result.err != nil {
+					t.Errorf("active refresh failed: %v", result.err)
+				}
+			}()
+			<-started
+			other := startToken(p, context.Background(), githubauth.Repository{Owner: "owner", Name: "other"})
+			if result := awaitToken(t, other); result.err != nil || result.token != "other-token" {
+				t.Fatalf("unrelated repository was blocked: %v", result.err)
+			}
+		})
+	}
+}
+
+func TestTokenRefreshCoordination(t *testing.T) {
+	for _, outcome := range []string{"success", "canceled", "failed"} {
+		t.Run(outcome, func(t *testing.T) {
+			p := testProvider(t)
+			var lookups, exchanges atomic.Int32
+			started, release := make(chan struct{}), make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			defer unblock()
+			p.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodGet {
+					if lookups.Add(1) == 1 {
+						close(started)
+						select {
+						case <-r.Context().Done():
+							return nil, r.Context().Err()
+						case <-release:
+						}
+						if outcome == "failed" {
+							return response(403, `{}`), nil
+						}
+					}
+					return response(200, installedJSON), nil
+				}
+				exchanges.Add(1)
+				return response(201, tokenJSON(time.Now().Add(time.Hour), "fresh")), nil
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			leader := startToken(p, ctx, githubauth.Repository{Owner: "owner", Name: "repo"})
+			<-started
+			// Repository keys are case-insensitive, including active refreshes.
+			waitCtx := &tokenWaitingContext{Context: context.Background(), waiting: make(chan struct{})}
+			waiter := startToken(p, waitCtx, githubauth.Repository{Owner: "OWNER", Name: "REPO"})
+			awaitTokenWait(t, waitCtx)
+			if lookups.Load() != 1 {
+				t.Fatal("concurrent caller started a duplicate refresh")
+			}
+			if outcome == "canceled" {
+				cancel()
+			} else {
+				unblock()
+			}
+			first := awaitToken(t, leader)
+			if outcome == "success" && (first.err != nil || first.token != "fresh") {
+				t.Fatalf("refresh failed: %v", first.err)
+			}
+			if outcome == "canceled" && first.err != context.Canceled {
+				t.Fatalf("refresh cancellation lost: %v", first.err)
+			}
+			if outcome == "failed" && (first.err == nil || first.token != "") {
+				t.Fatal("failed refresh returned credentials")
+			}
+			if result := awaitToken(t, waiter); result.err != nil || result.token != "fresh" {
+				t.Fatalf("waiter could not reuse or retry refresh: %v", result.err)
+			}
+			wantLookups := int32(1)
+			if outcome != "success" {
+				wantLookups = 2
+			}
+			if lookups.Load() != wantLookups || exchanges.Load() != 1 {
+				t.Fatalf("unexpected refresh requests: lookups=%d exchanges=%d", lookups.Load(), exchanges.Load())
+			}
+		})
 	}
 }
 

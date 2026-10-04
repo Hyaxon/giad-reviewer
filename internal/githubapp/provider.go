@@ -21,12 +21,13 @@ import (
 // Provider keeps keys and installation tokens in the trusted host's memory.
 // One instance is shared by API and checkout operations within a CLI invocation.
 type Provider struct {
-	identity config.AppIdentity
-	key      *rsa.PrivateKey
-	http     *http.Client
-	now      func() time.Time
-	mu       sync.Mutex
-	tokens   map[string]accessToken
+	identity  config.AppIdentity
+	key       *rsa.PrivateKey
+	http      *http.Client
+	now       func() time.Time
+	mu        sync.Mutex
+	tokens    map[string]accessToken
+	refreshes map[string]chan struct{}
 }
 
 var _ githubauth.Provider = (*Provider)(nil)
@@ -68,7 +69,7 @@ func NewProvider(identity config.AppIdentity) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Provider{identity: identity, key: key, now: time.Now, tokens: map[string]accessToken{}, http: &http.Client{
+	return &Provider{identity: identity, key: key, now: time.Now, tokens: map[string]accessToken{}, refreshes: map[string]chan struct{}{}, http: &http.Client{
 		Timeout:       30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}, nil
@@ -87,38 +88,64 @@ func (p *Provider) Token(ctx context.Context, repo githubauth.Repository) (strin
 			return "", fmt.Errorf("GitHub App authentication requires a repository owner and name")
 		}
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
 	cacheKey := strings.ToLower(repo.Owner + "/" + repo.Name)
-	if cached, ok := p.tokens[cacheKey]; ok && cached.ExpiresAt.After(p.now().Add(2*time.Minute)) {
-		return cached.Token, nil
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		p.mu.Lock()
+		if cached, ok := p.tokens[cacheKey]; ok && cached.ExpiresAt.After(p.now().Add(2*time.Minute)) {
+			p.mu.Unlock()
+			return cached.Token, nil
+		}
+		if done, ok := p.refreshes[cacheKey]; ok {
+			p.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-done:
+				// Recheck the cache; a failed or canceled refresh can be retried
+				// using this caller's context.
+				continue
+			}
+		}
+		// Discard an expired entry even when refresh subsequently fails.
+		delete(p.tokens, cacheKey)
+		done := make(chan struct{})
+		p.refreshes[cacheKey] = done
+		p.mu.Unlock()
+
+		// Only cache and refresh coordination use the mutex. JWT generation
+		// and HTTP requests run under the refreshing caller's context.
+		token, err := p.repositoryToken(ctx, repo)
+		p.mu.Lock()
+		if err == nil {
+			p.tokens[cacheKey] = token
+		}
+		delete(p.refreshes, cacheKey)
+		close(done)
+		p.mu.Unlock()
+		return token.Token, err
 	}
-	// Discard an expired entry even when refresh subsequently fails.
-	delete(p.tokens, cacheKey)
+}
+
+func (p *Provider) repositoryToken(ctx context.Context, repo githubauth.Repository) (accessToken, error) {
 	jwt, err := GenerateJWT(p.identity.ClientID, p.key)
 	if err != nil {
-		return "", err
+		return accessToken{}, err
 	}
 	var installed installation
 	path := "/repos/" + url.PathEscape(repo.Owner) + "/" + url.PathEscape(repo.Name) + "/installation"
 	if err := p.request(ctx, http.MethodGet, path, jwt, nil, http.StatusOK, &installed); err != nil {
-		return "", err
+		return accessToken{}, err
 	}
 	if err := p.validateInstallation(installed); err != nil {
-		return "", err
+		return accessToken{}, err
 	}
 	if !strings.EqualFold(installed.Account.Login, repo.Owner) {
-		return "", fmt.Errorf("GitHub App installation belongs to a different repository owner")
+		return accessToken{}, fmt.Errorf("GitHub App installation belongs to a different repository owner")
 	}
-	token, err := p.exchange(ctx, jwt, []string{repo.Name})
-	if err != nil {
-		return "", err
-	}
-	p.tokens[cacheKey] = token
-	return token.Token, nil
+	return p.exchange(ctx, jwt, []string{repo.Name})
 }
 
 func requiredPermissions() map[string]string {
