@@ -48,8 +48,8 @@ Skip the `gh` check if you will use App authentication.
 Once the release tag is available on GitHub, use a fresh directory:
 
 ```sh
-git clone --branch v1.0.0 https://github.com/Hyaxon/magi-agents.git
-cd magi-agents
+git clone --branch v1.0.0 https://github.com/Hyaxon/giad.git
+cd giad
 make all
 make images
 ./bin/giad --version
