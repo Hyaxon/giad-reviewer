@@ -76,6 +76,7 @@ jobs:
         run: |
           ./bin/giad --help
           ./bin/giad --version
+          test "$(./bin/giad --version)" = "giad version $(cat VERSION)"
 
       - name: Build isolated example images
         run: make images

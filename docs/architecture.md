@@ -50,6 +50,9 @@ Finding validation checks structure and inspected anchors, not factual correctne
 Publication is a separate, confirmed `COMMENT` or `REQUEST_CHANGES` review.
 Optional inline findings use single head-side diff lines. Retries match the author,
 action, commit, body, and comments; durable attempt records prevent blind resends.
+Completed reviews can reconcile after the PR changes or closes; only new writes
+require current revisions, an open PR, and valid inline anchors. Body-only findings
+can refer to inspected lines elsewhere in a changed head file.
 Previous comment formats remain recognizable after presentation changes.
 A final revision check narrows the write race; GitHub's review `commit_id` pins the
 inspected head but supplies no atomic base/head precondition.
@@ -66,3 +69,4 @@ patches and approval are also outside the current scope.
 
 The CLI/module/config names are GIAD and the wire version is `giad/v1`.
 Old `agentic-review/v1` frames and manifests are rejected.
+The V1 public contract is `giad/v1`; incompatible changes require a new wire version.

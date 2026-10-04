@@ -121,11 +121,15 @@ func (s Session) Run(ctx context.Context) (report protocol.Report, err error) {
 		var result any
 		var callErr error
 		if frame.Method == "review.finish" {
-			callErr = decode(frame.Params, &report)
+			// A rejected decode may partially populate its target. Each attempt
+			// must supply a complete report independently of previous requests.
+			var candidate protocol.Report
+			callErr = decode(frame.Params, &candidate)
 			if callErr == nil {
-				callErr = broker.validate(report)
+				callErr = broker.validate(candidate)
 			}
 			if callErr == nil {
+				report = candidate
 				if len(broker.tests) == 0 {
 					report.Limitations += "\nGIAD: no test profile was run."
 				}

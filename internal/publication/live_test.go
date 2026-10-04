@@ -28,22 +28,14 @@ func TestPublishedInlineReviewReconciliationReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := Target(draft)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	client := githubapi.NewClient(githubauth.UserAuth{})
-	current, err := client.GetPRContext(ctx, repo, draft.Job.Number)
+	plan, err := PrepareForReconciliation(draft, Options{Event: "COMMENT", Inline: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := PrepareWithOptions(draft, current, Options{Event: "COMMENT", Inline: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := Publish(ctx, readOnlyPublicationAPI{client}, plan, plan.Key, t.TempDir())
+	outcome, err := Reconcile(ctx, readOnlyPublicationAPI{client}, plan, plan.Key)
 	if err != nil || !outcome.Existing || outcome.Review.ID <= 0 {
 		t.Fatalf("read-only reconciliation failed: outcome=%+v err=%v", outcome, err)
 	}

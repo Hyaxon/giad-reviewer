@@ -50,7 +50,7 @@ func TestPlanValidatesRevisionsAndAnchors(t *testing.T) {
 				current.Files[0].Filename = "auth space.go"
 				current.Diff = strings.Replace(current.Diff, "+++ b/auth.go", `+++ "b/auth space.go"`, 1)
 			}
-			plan, err := Prepare(draft, current)
+			plan, err := PrepareWithOptions(draft, current, Options{Inline: true})
 			valid := mode == "valid" || mode == "literal text" || mode == "deletion elsewhere" || mode == "quoted path"
 			if (err == nil) != valid {
 				t.Fatalf("plan=%+v err=%v", plan, err)
@@ -429,6 +429,35 @@ func TestHashRemovalRecognizesBothOlderCommentFormats(t *testing.T) {
 			if (err == nil) == uncertain || (!uncertain && !outcome.Existing) || api.posts != before {
 				t.Fatalf("header change caused a duplicate review: outcome=%+v err=%v", outcome, err)
 			}
+		}
+	}
+}
+
+func TestReconciliationPlanCannotAuthorizeNewPublication(t *testing.T) {
+	draft, current := fixture()
+	for _, inline := range []bool{false, true} {
+		fresh, err := PrepareWithOptions(draft, current, Options{Inline: inline})
+		if err != nil {
+			t.Fatal(err)
+		}
+		prior, err := PrepareForReconciliation(draft, Options{Inline: inline})
+		if err != nil || prior.Key != fresh.Key || prior.Body != fresh.Body {
+			t.Fatalf("retry rendering changed the confirmation: %v", err)
+		}
+		api := &fakeAPI{current: current.PullRequest}
+		if outcome, err := Reconcile(context.Background(), api, prior, prior.Key); err != nil || outcome.Existing || api.posts != 0 {
+			t.Fatalf("reconciliation must remain read-only: %+v %v", outcome, err)
+		}
+		if _, err := Publish(context.Background(), api, prior, prior.Key, t.TempDir()); err == nil || api.posts != 0 {
+			t.Fatal("a reconciliation plan authorized a new POST")
+		}
+		if _, err := Publish(context.Background(), api, fresh, fresh.Key, t.TempDir()); err != nil {
+			t.Fatal(err)
+		}
+		api.current.State = "closed"
+		api.current.Head.SHA = strings.Repeat("c", 40)
+		if outcome, err := Reconcile(context.Background(), api, prior, prior.Key); err != nil || !outcome.Existing || api.posts != 1 {
+			t.Fatalf("completed review did not reconcile after closure: %+v %v", outcome, err)
 		}
 	}
 }

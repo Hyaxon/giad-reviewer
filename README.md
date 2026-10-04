@@ -4,9 +4,9 @@ A self-hosted runtime for programmable pull-request review agents. GIAD handles
 GitHub access, checkouts, sandboxed execution, repository tools, optional models,
 and confirmed publication. Agents supply the review judgment.
 
-The manual workflow works today: inspect a PR, run one installed agent, save a
-draft, and publish a review. V1 release validation on another repository and a
-fresh setup is still pending.
+V1 provides a manual workflow: inspect a PR, run one installed agent, save a
+draft, and publish a confirmed review. Builds use the release version in
+[VERSION](VERSION); check your binary with `./bin/giad --version`.
 
 ## Get started
 
@@ -45,21 +45,23 @@ publication preview, then repeat with the printed confirmation hash:
 The default event is `COMMENT`. Add `--event REQUEST_CHANGES` to both commands to
 request changes. With App auth, include `--identity identity.toml` in both.
 Personal accounts cannot request changes on their own PRs.
+Inline findings must fall within a head-side diff hunk. Omit `--inline` to publish
+findings elsewhere in an inspected changed head file in the review body.
 
 GIAD checks current revisions and inline anchors before posting. Confirmation
-covers the action, body, and comments. Retries recognize completed reviews;
-uncertain attempts require reconciliation. Comments preserve code formatting.
+covers the action, body, and comments. Rerunning the same confirmed command
+recognizes completed reviews even after a push or merge. Uncertain attempts stay
+guarded against resending. Comments preserve code formatting.
 Base/head hashes stay in the draft and validation, outside the visible review body.
 Nothing publishes during `review`; agents have no publication capability.
 
 ## Planned features and checks
 
-Before V1:
-
-- [ ] Validate another repository with executable code and passing/failing tests.
-- [ ] Verify setup from a clean checkout, including examples and Docker isolation.
-- [ ] Verify App publication and retry reconciliation end to end.
-- [ ] Freeze the public protocol and prepare a versioned release.
+V1 supports github.com, one agent per review, preinstalled Docker images, optional
+Ollama models, approved head-only tests, and confirmed `COMMENT` or
+`REQUEST_CHANGES` publication. The public contract is `giad/v1`; incompatible
+wire changes require a new protocol version. Model accuracy and each project's
+agent/test-image setup need their own validation.
 
 Future features, with scope and order still open:
 
@@ -94,3 +96,7 @@ make smoke                 # Offline agent/broker integration.
 make sandbox-smoke         # Real Docker isolation; build images first.
 make lint                  # Markdown checks.
 ```
+
+## License
+
+GIAD is licensed under the [Apache License, Version 2.0](LICENSE).

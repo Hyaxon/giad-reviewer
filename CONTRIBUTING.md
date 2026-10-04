@@ -29,6 +29,9 @@ Use focused tests while developing, then run the relevant checks before opening 
 PR. Documentation-only changes need Markdown linting and a check that links and
 commands are accurate. CI also checks formatting, builds, and Docker isolation.
 Report checks that could not run and why.
+`make check TEST_FLAGS='-run PATTERN'` can select focused tests. Full checks and
+smoke tests launch fixture/example agents; report any execution tests you omit.
+`make build` embeds [VERSION](VERSION); update it when preparing a release.
 
 ## Changes and pull requests
 
