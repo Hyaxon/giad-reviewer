@@ -4,6 +4,11 @@ For agent authors. Wire types live in [protocol.go](../pkg/protocol/protocol.go)
 and [model.go](../pkg/protocol/model.go); test types are in
 [tests.go](../pkg/protocol/tests.go). Use these as the schema reference.
 
+The [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents)
+implements this same contract with explicit manifests and host grants; official
+status adds no privileges. Proposed tools in the [runtime roadmap](roadmap.md)
+are not available protocol methods.
+
 ## Launch and framing
 
 Use [the manifest example](../example/agent.manifest.json) with

@@ -20,8 +20,8 @@ import (
 // Scripted judgments verify the real agent/broker contract, not model accuracy.
 type reviewProvider struct {
 	response      string
-	firstResponse string
 	plan          []protocol.ToolCall
+	firstResponse string
 	err           error
 	chats         int
 	unloads       int
@@ -37,7 +37,8 @@ func (p *reviewProvider) Chat(_ context.Context, tag string, messages []model.Me
 	if p.err != nil {
 		return model.Message{}, p.err
 	}
-	if p.chats == 1 {
+
+	if p.chats == 1 && len(p.plan) > 0 {
 		for _, call := range p.plan {
 			advertised := false
 			for _, definition := range toolDefinitions {
@@ -49,12 +50,20 @@ func (p *reviewProvider) Chat(_ context.Context, tag string, messages []model.Me
 		}
 		return model.Message{Role: "assistant", ToolCalls: p.plan}, nil
 	}
-	if p.chats == 2 && p.firstResponse != "" {
+	reportCall := p.chats
+	if len(p.plan) > 0 {
+		reportCall--
+	}
+	if reportCall == 1 && p.firstResponse != "" {
 		return model.Message{Role: "assistant", Content: p.firstResponse}, p.err
 	}
 	return model.Message{Role: "assistant", Content: p.response}, p.err
 }
-func (p *reviewProvider) Unload(context.Context, string) error { p.unloads++; return nil }
+
+func (p *reviewProvider) Unload(context.Context, string) error {
+	p.unloads++
+	return nil
+}
 
 func reviewPlan(path, testProfile string) []protocol.ToolCall {
 	args, _ := json.Marshal(map[string]any{"path": path, "start": 1, "end": 0})
@@ -109,7 +118,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 		t.Fatal(err)
 	}
 	manifest.Entrypoint = entrypoint
-	grants, err := Grants(manifest, []string{"git.diff", "repository.read", "repository.search", "repository.instructions", "model.chat"})
+	grants, err := Grants(manifest, []string{"git.diff", "repository.read", "repository.search", "repository.instructions", "model.chat", "github.linked_issues"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +137,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 		modelErr   bool
 		valid      bool
 		testResult *protocol.TestResult
+		broad      bool
 	}{
 		{name: "anchored finding", findings: []protocol.Finding{finding}, valid: true},
 		{name: "no findings", findings: []protocol.Finding{}, valid: true},
@@ -138,9 +148,18 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 		{name: "unread anchor", findings: []protocol.Finding{finding}},
 		{name: "failed tests are evidence", findings: []protocol.Finding{}, valid: true, testResult: &protocol.TestResult{Profile: "go", ExitCode: func() *int { n := 1; return &n }(), Output: "TestLogin FAILED"}},
 		{name: "test timeout", findings: []protocol.Finding{}, valid: true, testResult: &protocol.TestResult{Profile: "go", TimedOut: true, Truncated: true, Output: "partial output"}},
+		{name: "whole PR later lines and dependencies", valid: true, broad: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			if test.broad {
+				for i := 0; i < 5; i++ {
+					f := finding
+					f.File, f.Line = "file4.py", 180+i
+					test.findings = append(test.findings, f)
+				}
+			}
 			if test.name == "unread anchor" {
+				test.findings = append([]protocol.Finding{}, test.findings...)
 				test.findings[0].Line = 999
 			}
 			response, err := json.Marshal(protocol.Report{Summary: "Inspected authentication", Limitations: "No caller context available.", Findings: test.findings})
@@ -163,6 +182,26 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			root := t.TempDir()
 			if err := os.WriteFile(filepath.Join(root, "auth.py"), []byte("def authenticate(password):\n    return password == 'secret'\n"), 0600); err != nil {
 				t.Fatal(err)
+			}
+			changed := []protocol.ChangedFile{{Path: "auth.py", Status: "added"}}
+			if test.broad {
+				changed, provider.plan = nil, nil
+				for i := 0; i < 5; i++ {
+					name := "file" + string(rune('0'+i)) + ".py"
+					if err := os.WriteFile(filepath.Join(root, name), []byte(strings.Repeat("return password == 'secret'\n", 220)), 0600); err != nil {
+						t.Fatal(err)
+					}
+					changed = append(changed, protocol.ChangedFile{Path: name, Status: "modified"})
+					args, _ := json.Marshal(map[string]any{"path": name, "start": 180, "end": 0})
+					provider.plan = append(provider.plan, protocol.ToolCall{Function: protocol.CallFunction{Name: "repository_read", Arguments: args}})
+				}
+				if err := os.WriteFile(filepath.Join(root, "helper.py"), []byte("authenticate(password)\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				provider.plan = append(provider.plan,
+					protocol.ToolCall{Function: protocol.CallFunction{Name: "repository_search", Arguments: json.RawMessage(`{"query":"authenticate("}`)}},
+					protocol.ToolCall{Function: protocol.CallFunction{Name: "repository_read", Arguments: json.RawMessage(`{"path":"helper.py","start":1,"end":0}`)}},
+				)
 			}
 			reader, err := tools.Open(root, "diff --git a/auth.py b/auth.py\n+    return password == 'secret'\n")
 			if err != nil {
@@ -191,7 +230,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 				Launcher: launcher, Manifest: manifest, Repository: reader,
 				Tests:    tests,
 				Profiles: map[string]Profile{"review": {Provider: provider, Model: "fixture"}},
-				Job: protocol.Job{ChangedFiles: []protocol.ChangedFile{{Path: "auth.py", Status: "added"}}, AllowedCapabilities: jobGrants, TestProfiles: testProfiles,
+				Job: protocol.Job{ChangedFiles: changed, AllowedCapabilities: jobGrants, TestProfiles: testProfiles,
 					TrustedInstructions: []protocol.Instruction{
 						{Path: "AGENTS.md", Scope: ".", Content: "root-guidance-marker"},
 						{Path: "other/AGENTS.md", Scope: "other", Content: "unrelated-guidance-marker"},
@@ -200,6 +239,9 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			if test.valid {
 				if err != nil || report.Findings == nil || len(report.Findings) != len(test.findings) {
 					t.Fatalf("review report=%+v err=%v", report, err)
+				}
+				if test.broad && !strings.Contains(report.Limitations, "5 of 5") {
+					t.Fatal("lost whole-PR coverage")
 				}
 			} else if err == nil {
 				t.Fatalf("invalid model result must fail, got report=%+v", report)
@@ -229,7 +271,9 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			if len(provider.messages) < 3 || provider.messages[0].Role != "system" || provider.messages[1].Role != "user" || !strings.Contains(provider.messages[0].Content, "root-guidance-marker") || strings.Contains(provider.messages[0].Content, "unrelated-guidance-marker") {
 				t.Fatalf("model did not receive scoped guidance and inspected source: %+v", provider.messages)
 			}
-			if !test.modelErr && (!observedToolResult(provider.messages, "repository_search", "auth.py") || !observedToolResult(provider.messages, "repository_read", "2:     return password")) {
+			if !test.modelErr && !test.broad &&
+				(!observedToolResult(provider.messages, "repository_search", "auth.py") ||
+					!observedToolResult(provider.messages, "repository_read", "2:     return password")) {
 				t.Fatalf("model did not receive search results and inspected source: %+v", provider.messages)
 			}
 		})

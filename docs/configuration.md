@@ -13,6 +13,12 @@ and [giad.example.toml](../giad.example.toml). Agent/profile names must match.
 Entrypoint paths refer to files inside the installed Linux image. Reviews do not
 build or pull images; interpreters and dependencies must already be packaged.
 
+For the optional [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents),
+use the selected package's manifest and example policy after building its shared
+image locally. Its catalog records package versions and compatibility; it does
+not grant capabilities or replace trusted host configuration. Official packages
+have no privileged permissions.
+
 ## Runtime policy
 
 | Entry | Meaning |
@@ -28,7 +34,7 @@ build or pull images; interpreters and dependencies must already be packaged.
 
 Required capabilities must be declared, granted, and implemented; otherwise launch
 fails. Optional capabilities remain off unless all three hold. Unknown fields fail
-validation. There is no automatic config lookup or agent registry.
+validation. There is no automatic config lookup or catalog discovery/installation.
 
 ## Optional tests
 
@@ -38,7 +44,7 @@ config and adding the test profile below. Keep your existing model settings.
 ```toml
 [agents.code-review]
 sandbox_image = "giad-code-review:example"
-capabilities = ["git.diff", "repository.read", "repository.instructions", "model.chat", "tests.run"]
+capabilities = ["git.diff", "repository.read", "repository.search", "repository.instructions", "model.chat", "github.linked_issues", "tests.run"]
 test_profiles = ["go"]
 
 [tests.go]
