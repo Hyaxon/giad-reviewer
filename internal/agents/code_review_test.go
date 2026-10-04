@@ -37,9 +37,16 @@ func (p *reviewProvider) Chat(_ context.Context, tag string, messages []model.Me
 	if p.err != nil {
 		return model.Message{}, p.err
 	}
+
 	if p.chats == 1 && len(p.plan) > 0 {
-		if len(toolDefinitions) == 0 {
-			return model.Message{}, errors.New("review tools missing")
+		for _, call := range p.plan {
+			advertised := false
+			for _, definition := range toolDefinitions {
+				advertised = advertised || definition.Function.Name == call.Function.Name
+			}
+			if !advertised {
+				return model.Message{}, errors.New("research tool was not advertised")
+			}
 		}
 		return model.Message{Role: "assistant", ToolCalls: p.plan}, nil
 	}
@@ -52,7 +59,33 @@ func (p *reviewProvider) Chat(_ context.Context, tag string, messages []model.Me
 	}
 	return model.Message{Role: "assistant", Content: p.response}, p.err
 }
-func (p *reviewProvider) Unload(context.Context, string) error { p.unloads++; return nil }
+
+func (p *reviewProvider) Unload(context.Context, string) error {
+	p.unloads++
+	return nil
+}
+
+func reviewPlan(path, testProfile string) []protocol.ToolCall {
+	args, _ := json.Marshal(map[string]any{"path": path, "start": 1, "end": 0})
+	plan := []protocol.ToolCall{
+		{Function: protocol.CallFunction{Name: "repository_search", Arguments: json.RawMessage(`{"query":"return"}`)}},
+		{Function: protocol.CallFunction{Name: "repository_read", Arguments: args}},
+	}
+	if testProfile != "" {
+		args, _ := json.Marshal(protocol.TestRequest{Profile: testProfile})
+		plan = append(plan, protocol.ToolCall{Function: protocol.CallFunction{Name: "tests_run", Arguments: args}})
+	}
+	return plan
+}
+
+func observedToolResult(messages []model.Message, name, evidence string) bool {
+	for _, message := range messages {
+		if message.Role == "tool" && message.ToolName == name && strings.Contains(message.Content, evidence) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestCodeReviewIntegration(t *testing.T) {
 	python, err := exec.LookPath("python3")
@@ -133,9 +166,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			if err != nil {
 				t.Fatal(err)
 			}
-			provider := &reviewProvider{response: string(response), plan: []protocol.ToolCall{
-				{Function: protocol.CallFunction{Name: "repository_read", Arguments: json.RawMessage(`{"path":"auth.py","start":1,"end":0}`)}},
-			}}
+			provider := &reviewProvider{response: string(response), plan: reviewPlan("auth.py", "")}
 			if test.fenced {
 				provider.response = "```json\n" + provider.response + "\n```"
 			}
@@ -184,7 +215,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			var tests TestExecutor
 			testCalls := 0
 			if test.testResult != nil {
-				provider.plan = append(provider.plan, protocol.ToolCall{Function: protocol.CallFunction{Name: "tests_run", Arguments: json.RawMessage(`{"profile":"go"}`)}})
+				provider.plan = reviewPlan("auth.py", "go")
 				jobGrants = append(jobGrants, "tests.run")
 				testProfiles = []string{"go"}
 				tests = testExecFunc(func(_ context.Context, name string) (protocol.TestResult, error) {
@@ -218,7 +249,7 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			if test.testResult == nil && test.valid && !strings.Contains(report.Limitations, "No tests ran") {
 				t.Fatal("missing test coverage limitation")
 			}
-			if test.testResult != nil && (testCalls != 1 || !strings.Contains(reviewMessages(provider.messages), test.testResult.Output) || strings.Contains(report.Limitations, "No tests ran")) {
+			if test.testResult != nil && (testCalls != 1 || !observedToolResult(provider.messages, "tests_run", test.testResult.Output) || strings.Contains(report.Limitations, "No tests ran")) {
 				t.Fatalf("test evidence missing: calls=%d report=%+v messages=%+v", testCalls, report, provider.messages)
 			}
 			if _, isolated := launcher.(sandbox.DockerLauncher); isolated && !test.valid && !strings.Contains(err.Error(), "Agent diagnostics: code-review:") {
@@ -237,8 +268,13 @@ func runCodeReviewIntegration(t *testing.T, launcher sandbox.Launcher, entrypoin
 			if provider.chats != wantChats || provider.unloads != 1 {
 				t.Fatalf("model lifecycle: chats=%d unloads=%d", provider.chats, provider.unloads)
 			}
-			if provider.messages[0].Role != "system" || provider.messages[1].Role != "user" || !strings.Contains(provider.messages[0].Content, "root-guidance-marker") || strings.Contains(provider.messages[0].Content, "unrelated-guidance-marker") || (!test.modelErr && !test.broad && !strings.Contains(reviewMessages(provider.messages), "2:     return password")) {
+			if len(provider.messages) < 3 || provider.messages[0].Role != "system" || provider.messages[1].Role != "user" || !strings.Contains(provider.messages[0].Content, "root-guidance-marker") || strings.Contains(provider.messages[0].Content, "unrelated-guidance-marker") {
 				t.Fatalf("model did not receive scoped guidance and inspected source: %+v", provider.messages)
+			}
+			if !test.modelErr && !test.broad &&
+				(!observedToolResult(provider.messages, "repository_search", "auth.py") ||
+					!observedToolResult(provider.messages, "repository_read", "2:     return password")) {
+				t.Fatalf("model did not receive search results and inspected source: %+v", provider.messages)
 			}
 		})
 	}
@@ -270,10 +306,7 @@ func TestDockerCodeReviewWithTests(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reader.Close()
-	provider := &reviewProvider{response: `{"summary":"Inspected Add with test evidence","limitations":"Head tests only","findings":[]}`, plan: []protocol.ToolCall{
-		{Function: protocol.CallFunction{Name: "repository_read", Arguments: json.RawMessage(`{"path":"add.go","start":1,"end":0}`)}},
-		{Function: protocol.CallFunction{Name: "tests_run", Arguments: json.RawMessage(`{"profile":"go"}`)}},
-	}}
+	provider := &reviewProvider{response: `{"summary":"Inspected Add with test evidence","limitations":"Head tests only","findings":[]}`, plan: reviewPlan("add.go", "go")}
 	tests := &sandbox.TestRunner{Checkout: root, Profiles: map[string]sandbox.TestProfile{"go": {Image: testImage, Command: "/usr/local/go/bin/go", Args: []string{"test", "-p", "1", "./..."}, TimeoutSeconds: 90}}}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -285,12 +318,7 @@ func TestDockerCodeReviewWithTests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tests.Results) != 1 || tests.Results[0].ExitCode == nil || *tests.Results[0].ExitCode != 1 || !strings.Contains(reviewMessages(provider.messages), "TestAdd") || !strings.Contains(report.Limitations, "test profile go failed") {
+	if len(tests.Results) != 1 || tests.Results[0].ExitCode == nil || *tests.Results[0].ExitCode != 1 || !observedToolResult(provider.messages, "tests_run", "TestAdd") || !strings.Contains(report.Limitations, "test profile go failed") {
 		t.Fatalf("test evidence lost: results=%+v messages=%+v report=%+v", tests.Results, provider.messages, report)
 	}
-}
-
-func reviewMessages(messages []model.Message) string {
-	data, _ := json.Marshal(messages)
-	return string(data)
 }
