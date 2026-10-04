@@ -4,10 +4,16 @@
 | --- | --- |
 | [pr-summary](pr-summary/agent.py) | Tiny Python metadata summary with an explicit manifest |
 | [diff-inspector](diff-inspector/main.go) | Go peer requesting the diff through the broker |
-| [code-review](code-review/agent.py) | Model-backed findings and optional sandboxed tests |
+| [code-review](code-review/README.md) | General PR review with adaptive tools and optional sandboxed tests |
 
 Use [the generic manifest](agent.manifest.json) when defining another package.
 Every runnable example uses an installed Docker image.
+
+The optional [official GIAD Agents collection](https://github.com/Hyaxon/giad-agents)
+is available separately with package manifests, a shared image, and a source
+catalog. It also includes the model-free `test-summary`, which summarizes approved
+test runs. Planned specialists such as MAGI, Test Writer, and Wacht are described
+in its [agent roadmap](https://github.com/Hyaxon/giad-agents/blob/main/docs/roadmap.md).
 
 ## Smallest example
 
@@ -61,7 +67,8 @@ all commands to use personal GitHub CLI authentication instead.
 
 ## Model-backed reviewer
 
-Start Ollama, inspect `ollama list`, and choose an installed model tag. Copy the
+Start Ollama, inspect `ollama list`, and choose an installed model that supports
+tool calls. Copy the
 configuration once, then edit `models.review.model` in your local `giad.toml`:
 
 ```sh
@@ -82,16 +89,26 @@ Run after setting the model:
 For bot authentication, append `--identity identity.toml`. Then follow
 [the publication commands](../README.md#save-and-publish).
 
-The reviewer reads the diff and at most three changed head files, first 160 lines
-each. It applies scoped base guidance and asks the host's `review` model for
-anchored findings. Invalid reports get one correction attempt, then fail.
-This is a protocol tutorial with limited coverage; model judgment needs evaluation.
+The reviewer mirrors the general reviewer in the official
+[GIAD Agents collection](https://github.com/Hyaxon/giad-agents). It plans from the PR,
+change inventory, and diff, then chooses source ranges, repository searches,
+dependency/context reads, linked issues, and approved tests as needed. There is no
+three-file, 160-line, 12 KiB evidence, or per-file finding cutoff.
+
+Scoped base guidance remains trusted; source, PR/issue text, and test logs remain
+evidence. Finding anchors must come from reads of changed head source. Context
+pagination, whole-turn eviction, and explicit coverage tracking keep reviews
+within GIAD's runtime budgets. Invalid reports can be corrected within the model
+budget; model/transport failures and unfinished reviews fail. See the
+[reviewer reference](code-review/README.md) for tools, limits, and synchronization.
+Model judgment still needs independent quality evaluation.
 
 ## Optional tests and integration checks
 
 Enable `tests.run` using [configuration](../docs/configuration.md#optional-tests).
-The reviewer runs the first approved profile once and supplies its observed results
-to the model. Tests are head-only and may use any trusted profile/image.
+The model can select approved profiles within GIAD's two-run budget and receives
+their observed results as evidence. Tests are head-only and may use any trusted
+profile/image; arbitrary commands and unapproved profiles are rejected.
 
 ```sh
 make images

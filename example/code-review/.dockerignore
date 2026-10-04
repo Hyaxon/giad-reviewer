@@ -1,3 +1,7 @@
 *
 !agent.py
 !Dockerfile
+!giad_agents
+!giad_agents/*.py
+**/__pycache__
+**/*.py[cod]
