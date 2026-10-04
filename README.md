@@ -10,6 +10,11 @@ draft, and publish a confirmed review. Builds use the release version in
 
 ## Get started
 
+V1 targets Linux amd64 with Docker Engine and macOS Apple Silicon with Docker
+Desktop. Native Windows is unsupported; other architectures and WSL2 are not yet
+validated. See [platforms and setup](docs/getting-started.md) for the support matrix,
+fresh installation, authentication, and troubleshooting.
+
 Install Go (version in `go.mod`), Git, and a running Linux Docker engine.
 Personal authentication also needs GitHub CLI; model-backed agents need Ollama.
 
@@ -55,6 +60,30 @@ guarded against resending. Comments preserve code formatting.
 Base/head hashes stay in the draft and validation, outside the visible review body.
 Nothing publishes during `review`; agents have no publication capability.
 
+## Current limitations
+
+- **Workflow:** github.com only, one agent per command, and serial execution.
+  There is no hosted service, webhook automation, catalog, or automatic installation.
+- **Agents and models:** install trusted Linux images and pass configuration
+  explicitly. Ollama is the only model provider. A remote model endpoint receives
+  the source conversations sent to it. The examples teach the protocol; their
+  findings and model accuracy need independent evaluation.
+- **Repository coverage:** reads require regular UTF-8 text files and exclude
+  symlinks and Git metadata. Submodules and Git LFS content are not fetched.
+  Large jobs can fail a budget check; bounded tools report incomplete coverage.
+  Exact limits are in the [agent protocol](docs/agent-protocol.md#finish).
+- **Tests:** agents must request a host-approved profile. Runs are head-only,
+  with no base comparison or network access. Dependencies must be in the trusted
+  image. Test snapshots reject symlinks and special files; passing tests do not
+  establish that tests existed or that the code is correct.
+- **Publication:** only `COMMENT` and `REQUEST_CHANGES` are supported. Inline
+  findings use single head-side diff lines; deleted-line and multiline comments
+  are unavailable. GitHub has no atomic base/head publication precondition, so a
+  final revision check narrows the remaining write race.
+- **Validation:** Ubuntu CI is configured for builds, tests, and Docker isolation;
+  macOS Apple Silicon has been exercised locally. A fresh end-to-end setup on a
+  separate repository and live App/model checks still need release validation.
+
 ## Planned features and checks
 
 V1 supports github.com, one agent per review, preinstalled Docker images, optional
@@ -75,6 +104,10 @@ Future features, with scope and order still open:
 - **Agent management:** easier package installation and selection from the catalog.
 - **CLI distribution:** versioned binaries and installation on `PATH`, so users
   run `giad <command>` without a repository checkout or `./bin/giad` path.
+- **More agent tools:** web search, web-page retrieval, and future integrations
+  through host-brokered capabilities with explicit grants, bounded requests, and
+  controls over source data sent to providers. External content remains untrusted;
+  agent containers retain their network isolation.
 - **Broader reviews:** base/head test comparisons, explicit issue selection, and
   deleted-line/multiline comments.
 - **Parallel execution:** concurrent reviews with shared model/resource limits.
@@ -83,6 +116,7 @@ Future features, with scope and order still open:
 
 ## Reference and development
 
+- [Getting started](docs/getting-started.md): platforms, setup, first draft, publication.
 - [Examples](example/README.md): runnable agents and optional Go tests.
 - [Configuration](docs/configuration.md): trusted policy, models, tests, authentication.
 - [Agent protocol](docs/agent-protocol.md): the public `giad/v1` contract.

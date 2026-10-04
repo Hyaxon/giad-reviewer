@@ -62,8 +62,9 @@ tokens with in-memory caching/refresh and the bot's durable user ID for retries.
 
 ## Planned work
 
-See [planned features and checks](../README.md#planned-features-and-checks) for the
-V1 checklist and future direction. The optional hosted service is a proposal;
+See [current limitations](../README.md#current-limitations) and
+[planned features and checks](../README.md#planned-features-and-checks) for supported
+scope and future direction. The optional hosted service is a proposal;
 the current implementation is the manual self-hosted workflow. Generated test
 patches and approval are also outside the current scope.
 

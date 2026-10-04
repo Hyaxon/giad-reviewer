@@ -1,6 +1,6 @@
 {
   "globs": ["**/*.md"],
-  "ignores": ["node_modules/**", "bin/**"],
+  "ignores": ["node_modules/**", "bin/**", "private/**"],
   "config": {
     "default": true,
     // Let prose wrap naturally; tables and source links can be long.

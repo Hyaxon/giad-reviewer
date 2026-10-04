@@ -1,5 +1,7 @@
 # Configuration
 
+Start with [platforms and setup](getting-started.md) to build and authenticate GIAD.
+
 Choose trusted files explicitly, outside the PR checkout:
 
 - `--agent-manifest`: installed executable, declared capabilities, model profiles.
