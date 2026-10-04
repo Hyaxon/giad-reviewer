@@ -1,11 +1,11 @@
-# Replace with a model already downloaded in your Ollama installation.
+# Choose an installed Ollama model that supports tool calls.
 [models.review]
 endpoint = "http://127.0.0.1:11434"
 model = "qwen3.8:27b-mlx"
 provider = "ollama"
 
 [agents.code-review]
-capabilities = ["git.diff", "repository.read", "repository.instructions", "model.chat"]
+capabilities = ["git.diff", "repository.read", "repository.search", "repository.instructions", "model.chat", "github.linked_issues"]
 sandbox_image = "giad-code-review:example"
 
 # To enable the optional test call, add "tests.run" to capabilities above and

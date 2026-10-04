@@ -4,11 +4,24 @@
   "version": "0.1.0",
   "entrypoint": {
     "command": "/usr/local/bin/python3",
-    "args": ["/agent/agent.py"]
+    "args": [
+      "/agent/agent.py"
+    ]
   },
   "capabilities": {
-    "required": ["git.diff", "repository.read", "repository.instructions", "model.chat"],
-    "optional": ["tests.run"]
+    "required": [
+      "git.diff",
+      "repository.read",
+      "repository.search",
+      "repository.instructions",
+      "model.chat"
+    ],
+    "optional": [
+      "tests.run",
+      "github.linked_issues"
+    ]
   },
-  "modelProfiles": ["review"]
+  "modelProfiles": [
+    "review"
+  ]
 }
